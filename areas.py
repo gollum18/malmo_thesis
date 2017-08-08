@@ -11,7 +11,6 @@ class Cell:
     # The various movement types
     FOUR_WAY_MOVEMENT = 9001 # N, E, S, W
     EIGHT_WAY_MOVEMENT = 9002 # N, E, S, W + Intermediary Directions
-    ANY_ANGLE_MOVEMENT = 9003 # Any direction
 
     # The various cell types
     OPEN = 10000
@@ -149,8 +148,35 @@ class Area2D:
     def is_goal_area(self):
         return self.is_goal_area
 
+    def generate_neighbors_fourway(self, pos):
+        neighbors = []
+        if self.is_valid_cell((pos[0], pos[1]-1, pos[2])): # North
+            neighbors.append((pos[0], pos[1]-1, pos[2]))
+        if self.is_valid_cell((pos[0]+1, pos[1], pos[2])): # West
+            neighbors.append((pos[0]+1, pos[1], pos[2]))
+        if self.is_valid_cell((pos[0], pos[1]+1, pos[2])): # South
+            neighbors.append((pos[0], pos[1]+1, pos[2]))
+        if self.is_valid_cell((pos[0]-1, pos[1], pos[2])): # East
+            neighbors.append((pos[0]-1, pos[1], pos[2]))
+        if self.get_transition_type(pos) == Cell.TRANSITION_LOWER:
+            neighbors.append((pos[0], pos[1], self.z - 1))
+        elif self.get_transition_type(pos) == Cell.TRANSITION_UPPER:
+            neighbors.append((pos[0], pos[1], self.z + 1))
+        return neighbors
+
+    def generate_neighbors_eightway(self, pos):
+        neighbors = []
+        for x in range(-1, 2):
+            for y in range(-1, 2):
+                if self.is_valid_cell((x, y)) and (x != 0 and y != 0):
+                    neighbors.append((x, y, self.z))
+        if self.get_transition_type(pos) == Cell.TRANSITION_LOWER:
+            neighbors.append((pos[0], pos[1], self.z - 1))
+        elif self.get_transition_type(pos) == Cell.TRANSITION_UPPER:
+            neighbors.append((pos[0], pos[1], self.z + 1))
+        return neighbors
+
     def is_valid_cell(self, pos):
-        x, y = pos
         if pos[0] < 0 or pos[0] >= self.x_dim:
             return False
         elif pos[1] < 0 or pos[1] >= self.y_dim:
@@ -229,6 +255,7 @@ class Area3D:
         self.agent_coords = start[0], start[1]
         self.goal = goal
         self.num_obs = num_obs
+        self.movement_type = movement_type
 
         if goal[0] < 0 or goal[0] >= x_dim or goal[1] < 0 or goal[1] >= y_dim or goal[2] < 0 or goal[2] >= z_dim:
             raise ValueError
@@ -318,6 +345,14 @@ class Area3D:
             return ValueError
         self.levels[z].set_state(pos, state)
 
+    def generate_neighbors(self, pos):
+        if pos[2] >= 0 and pos[2] < self.z_dim:
+            if self.movement_type == Cell.FOUR_WAY_MOVEMENT:
+                return self.levels[pos[2]].generate_neighbors_fourway(pos)
+            elif self.movement_type == Cell.EIGHT_WAY_MOVEMENT:
+                return self.levels[pos[2]].generate_neighbors_eightway(pos)
+        return None
+
     def is_goal_area(self, z):
         if z < 0 or z >= self.z_dim:
             return ValueError
@@ -333,6 +368,3 @@ class Area3D:
         if c0.get_level() != c1.get_level():
             return None
         return self.levels[c0.get_level()].line_of_sight(c0, c1)
-
-area = Area3D(10, 10, 3, (0, 0, 0), (5, 5, 2), 50, Cell.FOUR_WAY_MOVEMENT)
-print area
