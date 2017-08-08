@@ -3,14 +3,24 @@ import random
 
 class Cell:
 
+    # The various transition types
+    TRANSITION_NONE = 8000
+    TRANSITION_UPPER = 8001
+    TRANSITION_LOWER = 8002
+
+    # The various movement types
+    FOUR_WAY_MOVEMENT = 9001 # N, E, S, W
+    EIGHT_WAY_MOVEMENT = 9002 # N, E, S, W + Intermediary Directions
+    ANY_ANGLE_MOVEMENT = 9003 # Any direction
+
+    # The various cell types
     OPEN = 10000
     BLOCKED = 10001
     AGENT = 10002
     GOAL = 10003
-    TRANSITION_UPPER = 10004
-    TRANSITION_LOWER = 10005
+    PATH = 10004
 
-    def __init__(self, x, y, z, state):
+    def __init__(self, x, y, z, state, transition_type):
         """
         Creates a cell in a 2D Area.
         :param x: The x coordinate of this cell.
@@ -23,20 +33,24 @@ class Cell:
         self.z = z
         self.state = state
         self.parent = None
+        self.transition_type = transition_type
 
     def __str__(self):
+        if self.state != Cell.AGENT:
+            if self.transition_type == Cell.TRANSITION_UPPER:
+                return "U"
+            elif self.transition_type == Cell.TRANSITION_LOWER:
+                return "D"
         if self.state == Cell.OPEN:
             return "-"
-        elif self.state == Cell.BLOCKED:
+        if self.state == Cell.BLOCKED:
             return "B"
-        elif self.state == Cell.AGENT:
+        if self.state == Cell.AGENT:
             return "A"
-        elif self.state == Cell.GOAL:
+        if self.state == Cell.GOAL:
             return "G"
-        elif self.state == Cell.TRANSITION_UPPER:
-            return "U"
-        elif self.state == Cell.TRANSITION_LOWER:
-            return "D"
+        if self.state == Cell.PATH:
+            return "P"
 
     def get_parent(self):
         """
@@ -59,6 +73,9 @@ class Cell:
         """
         return self.state
 
+    def get_transition_type(self):
+        return self.transition_type
+
     def set_parent(self, parent):
         """
         Sets the parent of this cell.
@@ -75,26 +92,22 @@ class Cell:
         """
         self.state = state
 
-    def line_of_sight(self, cell):
-        """
-        Determines whether there is line of sight between two cells.
-        :param cell: The cell to check line of sight against.
-        :return: True if there is line of sight, false otherwise.
-        """
-        # TODO: Determine if this cell has line of sight to another. See CSC 290 project for implementation in C#.
-        raise NotImplementedError
+    def set_transition_type(self, type):
+        self.transition_type = type
+
 
 class Area2D:
 
-    def __init__(self, x_dim, y_dim, z):
+    def __init__(self, x_dim, y_dim, z, is_goal_area):
         self.x_dim = x_dim # The length of this area
         self.y_dim = y_dim # The width of this area
         self.z = z # The level of this area
         self.area = []
+        self.is_goal_area = is_goal_area
         for x in range(x_dim):
             row = []
             for y in range(y_dim):
-                row.append(Cell(x, y, z, Cell.OPEN))
+                row.append(Cell(x, y, z, Cell.OPEN, Cell.TRANSITION_NONE))
             self.area.append(row)
 
     def __str__(self):
@@ -121,21 +134,99 @@ class Area2D:
     def get_position(self, pos):
         return self.area[pos[0]][pos[1]].get_position()
 
+    def get_transition_type(self, pos):
+        return self.area[pos[0]][pos[1]].get_transition_type()
+
     def set_parent(self, pos, parent):
         self.area[pos[0]][pos[1]].set_parent(parent)
 
     def set_state(self, pos, state):
         self.area[pos[0]][pos[1]].set_state(state)
 
+    def set_transition_type(self, pos, type):
+        self.area[pos[0]][pos[1]].set_transition_type(type)
+
+    def is_goal_area(self):
+        return self.is_goal_area
+
+    def is_valid_cell(self, pos):
+        x, y = pos
+        if pos[0] < 0 or pos[0] >= self.x_dim:
+            return False
+        elif pos[1] < 0 or pos[1] >= self.y_dim:
+            return False
+        elif self.get_state(pos) == Cell.BLOCKED:
+            return False
+        return True
+
+    def line_of_sight(self, c0, c1):
+        """
+        Determines whether there is line of sight between two cells.
+        :param c0: The left cell.
+        :param c1: The right cell.
+        :return: True if there is line of sight, false otherwise.
+        """
+        xO, yO = c0.get_coords()
+        xT, yT = c1.get_coords()
+        dX, dY = xT - xO, yT - yO
+        sX, sY, f = 0, 0, 0
+
+        if dY < 0:
+            dY = -dY
+            sY = -1
+        else:
+            sY = 1
+
+        if dX < 0:
+            dX = -dX
+            sX = -1
+        else:
+            sX = 1
+
+        if dX >= dY:
+            while xO != xT:
+                f = f + dY
+                if f >= dX:
+                    if not self.is_valid_cell((xO + ((sX - 1) / 2), yO + ((sY - 1) / 2))):
+                        return False
+                    yO = yO + sY
+                    f = f - dX
+                if (f != 0 and
+                        not self.is_valid_cell((xO + ((sX - 1) / 2), yO + ((sY - 1) / 2)))):
+                    return False
+                if (dY == 0 and
+                    not self.is_valid_cell((xO + ((sX - 1) / 2), yO)) and
+                    not self.is_valid_cell((xO + ((sX - 1) / 2), yO - 1))):
+                    return False
+                xO = xO + sX
+        else:
+            while yO != yT:
+                f = f + dX
+                if f >= dY:
+                    if not self.is_valid_cell((xO + ((sX - 1) / 2), yO + ((sY - 1) / 2))):
+                        return False
+                    xO = xO + sX
+                    f = f - dY
+                if (f != 0 and
+                        not self.is_valid_cell((xO + ((sX - 1) / 2), yO + ((sY - 1) / 2)))):
+                    return False
+                if (dY == 0 and
+                    not self.is_valid_cell((xO, yO + ((sY - 1) / 2))) and
+                    not self.is_valid_cell((xO - 1, yO + ((sY - 1) / 2)))):
+                    return False
+                yO = yO + sY
+        return True
+
 
 class Area3D:
 
-    def __init__(self, x_dim, y_dim, z_dim, start, goal, num_obs):
+    def __init__(self, x_dim, y_dim, z_dim, start, goal, num_obs, movement_type):
         # Set the attributes of this object
         self.x_dim = x_dim
         self.y_dim = y_dim
         self.z_dim = z_dim
-        self.start = start
+        self.agent_level = start[2]
+        self.agent_coords = start[0], start[1]
         self.goal = goal
         self.num_obs = num_obs
 
@@ -148,7 +239,7 @@ class Area3D:
         # Setup up all of the levels with open cells
         self.levels = {}
         for z in range(z_dim):
-            self.levels[z] = Area2D(x_dim, y_dim, z)
+            self.levels[z] = Area2D(x_dim, y_dim, z, True if goal[2] == z else False)
 
         # Set the start and goal cells
         self.levels[start[2]].set_state((start[0], start[1]), Cell.AGENT)
@@ -162,8 +253,8 @@ class Area3D:
             x, y = random.randint(0, self.x_dim-1), random.randint(0, self.y_dim-1)
             while self.levels[z].get_state((x, y)) != Cell.OPEN and self.levels[z+1].get_state((x, y)) != Cell.OPEN:
                 x, y = random.randint(0, self.x_dim-1), random.randint(0, self.y_dim-1)
-            self.levels[z].set_state((x, y), Cell.TRANSITION_UPPER)
-            self.levels[z+1].set_state((x, y), Cell.TRANSITION_LOWER)
+            self.levels[z].set_transition_type((x, y), Cell.TRANSITION_UPPER)
+            self.levels[z+1].set_transition_type((x, y), Cell.TRANSITION_LOWER)
 
         # Generate some obstacles
         for i in range(num_obs):
@@ -178,6 +269,14 @@ class Area3D:
             s += "Level: {0}\n{1}\n".format(z, self.levels[z])
         return s
 
+    def get_agent_level(self):
+        return self.agent_level
+
+    def get_agent_coordinates(self):
+        return self.agent_coords
+
+    def get_agent_position(self):
+        return self.agent_coords[0], self.agent_coords[1], self.agent_level
 
     def get_parent(self, pos):
         x, y, z = pos
@@ -219,5 +318,21 @@ class Area3D:
             return ValueError
         self.levels[z].set_state(pos, state)
 
-area = Area3D(10, 10, 3, (0, 0, 0), (5, 5, 2), 50)
+    def is_goal_area(self, z):
+        if z < 0 or z >= self.z_dim:
+            return ValueError
+        return self.levels[z].is_goal_area()
+
+    def line_of_sight(self, c0, c1):
+        """
+        Will determine if there is line of sight between two cells on the same level.
+        :param c0: The left cell.
+        :param c1: The right cell.
+        :return: True if there is line of sight, false if not. None if the two cells are not on the same level.
+        """
+        if c0.get_level() != c1.get_level():
+            return None
+        return self.levels[c0.get_level()].line_of_sight(c0, c1)
+
+area = Area3D(10, 10, 3, (0, 0, 0), (5, 5, 2), 50, Cell.FOUR_WAY_MOVEMENT)
 print area
