@@ -107,6 +107,12 @@ class World3D:
             self.transitions[z] = transitions
 
         # TODO: Place obstacles accordingly, avoiding non open blocks and transitions
+        for i in range(num_obs):
+            x, y, z = self.rand_pos3d()
+            while not self.is_obs_pos_valid(x, y, z):
+                x, y, z = self.rand_pos3d()
+            self.set_state(x, y, z, State.BLOCKED)
+
 
     #
     # Built-ins
@@ -137,9 +143,6 @@ class World3D:
     def set_state(self, x, y, z, state):
         self.world[z][y][x][0] = state
 
-    def get_transitions_by_floor(self, z):
-        return self.transitions[z]
-
     def get_transition_type(self, x, y, z):
         return self.world[z][y][x][1]
 
@@ -155,6 +158,35 @@ class World3D:
     #
     # Methods
     #
+
+    def get_transitions_by_floor(self, z):
+        return self.transitions[z]
+
+    def is_obs_pos_valid(self, x, y, z):
+        # Perform some placement checks on the current level
+        if self.get_state(x, y, z) != State.OPEN:
+            return False
+        if self.get_transition_type(x, y, z) != TransitionType.TRANSITION_NONE:
+            return False
+
+        # Perform some transition checks on the floors above and below
+        if z == 0: # We are at the bottom level
+            # Check floor above for lower transition
+            if self.get_transitions_by_floor(z+1)[TransitionType.TRANSITION_LOWER] == (x, y, z+1):
+                return False
+        elif z == self.dimensions[2]-1: # We are at the top level
+            # Check floor below for upper transition
+            if self.get_transitions_by_floor(z-1)[TransitionType.TRANSITION_UPPER] == (x, y, z-1):
+                return False
+        else: # We are at a middle level
+            # Check floor above and below for transitions
+            if self.get_transitions_by_floor(z+1)[TransitionType.TRANSITION_LOWER] == (x, y, z+1):
+                return False
+            elif self.get_transitions_by_floor(z-1)[TransitionType.TRANSITION_UPPER] == (x, y, z-1):
+                return False
+
+        # All checks passed this is valid
+        return True
 
     def is_goal_area(self, z):
         return self.goal[2] == z
