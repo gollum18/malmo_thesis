@@ -51,6 +51,7 @@ class World3D:
         self.goal = goal
         self.num_obs = num_obs
         self.world = []
+        self.transitions = {}
         for z in range(zdim):
             plane = []
             for y in range(ydim):
@@ -66,42 +67,46 @@ class World3D:
         self.protect_cell(start[0], start[1], start[2])
         self.protect_cell(goal[0], goal[1], goal[2])
 
-        # Place the obstacles
-        for i in range(self.num_obs):
-            x, y, z = (random.randint(0, self.dimensions[0] - 1), random.randint(0, self.dimensions[1] - 1),
-                       random.randint(0, self.dimensions[2] - 1))
-            while self.get_state(x, y, z) != State.OPEN and self.get_state(x, y, z) == State.PROTECTED:
-                x, y, z = (random.randint(0, self.dimensions[0] - 1), random.randint(0, self.dimensions[1] - 1),
-                           random.randint(0, self.dimensions[2] - 1))
-            self.set_state(x, y, z, State.BLOCKED)
-
         # Place the transitions
-        for z in range(zdim):
-            for i in range(2):
-                x, y, = random.randint(0, self.dimensions[0] - 1), random.randint(0, self.dimensions[1] - 1)
-                if z == 0:
-                    while (self.get_state(x, y, z) != State.OPEN and
-                                   self.get_state(x, y, z + 1) == State.OPEN and
-                                   self.get_transition_type(x, y, z + 1) != TransitionType.TRANSITION_NONE):
-                        x, y, = random.randint(0, self.dimensions[0] - 1), random.randint(0, self.dimensions[1] - 1)
-                elif z == self.dimensions[2]-1:
-                    while (self.get_state(x, y, z) != State.OPEN and
-                                   self.get_state(x, y, z - 1) == State.OPEN and
-                                   self.get_transition_type(x, y, z - 1) == TransitionType.TRANSITION_NONE):
-                        x, y, = random.randint(0, self.dimensions[0] - 1), random.randint(0, self.dimensions[1] - 1)
-                else:
-                    while (self.get_state(x, y, z) != State.OPEN and
-                                   self.get_state(x, y, z + 1) == State.OPEN and
-                                   self.get_state(x, y, z - 1) == State.OPEN and
-                                   self.get_transition_type(x, y, z + 1) != TransitionType.TRANSITION_NONE and
-                                   self.get_transition_type(x, y, z - 1) != TransitionType.TRANSITION_NONE):
-                        x, y, = random.randint(0, self.dimensions[0] - 1), random.randint(0, self.dimensions[1] - 1)
-                if i == 0 and z > 0:
-                    self.world[z][y][x][1] = TransitionType.TRANSITION_LOWER
-                elif i == 1:
-                    if z < self.dimensions[2] - 1:
-                        self.world[z][y][x][1] = TransitionType.TRANSITION_UPPER
+        for z in range(self.dimensions[2]):
+            transitions = {}
+            if z == 0:
+                x, y = self.rand_pos2d()
+                while (self.get_state(x, y, z)!=State.OPEN and
+                               self.get_transition_type(x, y, z+1)!=TransitionType.TRANSITION_NONE):
+                    x, y = self.rand_pos2d()
+                self.set_transition_type(x, y, z, TransitionType.TRANSITION_UPPER)
+                transitions[TransitionType.TRANSITION_UPPER] = x, y, z
                 self.protect_cell(x, y, z)
+            elif z == self.dimensions[2]-1:
+                x, y = self.rand_pos2d()
+                while (self.get_state(x, y, z) != State.OPEN and
+                               self.get_transition_type(x, y, z - 1) != TransitionType.TRANSITION_NONE):
+                    x, y = self.rand_pos2d()
+                self.set_transition_type(x, y, z, TransitionType.TRANSITION_LOWER)
+                transitions[TransitionType.TRANSITION_LOWER] = x, y, z
+                self.protect_cell(x, y, z)
+            else:
+                for i in range(2):
+                    if i == 0: # Upper Transition
+                        x, y = self.rand_pos2d()
+                        while (self.get_state(x, y, z) != State.OPEN and
+                                       self.get_transition_type(x, y, z + 1) != TransitionType.TRANSITION_NONE):
+                            x, y = self.rand_pos2d()
+                        self.set_transition_type(x, y, z, TransitionType.TRANSITION_UPPER)
+                        transitions[TransitionType.TRANSITION_UPPER] = x, y, z
+                        self.protect_cell(x, y, z)
+                    else:
+                        x, y = self.rand_pos2d()
+                        while (self.get_state(x, y, z) != State.OPEN and
+                                       self.get_transition_type(x, y, z - 1) != TransitionType.TRANSITION_NONE):
+                            x, y = self.rand_pos2d()
+                        self.set_transition_type(x, y, z, TransitionType.TRANSITION_LOWER)
+                        transitions[TransitionType.TRANSITION_LOWER] = x, y, z
+                        self.protect_cell(x, y, z)
+            self.transitions[z] = transitions
+
+        # TODO: Place obstacles accordingly, avoiding non open blocks and transitions
 
     #
     # Built-ins
@@ -132,8 +137,14 @@ class World3D:
     def set_state(self, x, y, z, state):
         self.world[z][y][x][0] = state
 
+    def get_transitions_by_floor(self, z):
+        return self.transitions[z]
+
     def get_transition_type(self, x, y, z):
         return self.world[z][y][x][1]
+
+    def set_transition_type(self, x, y, z, type):
+        self.world[z][y][x][1] = type
 
     def get_start(self):
         return self.start
@@ -178,3 +189,10 @@ class World3D:
                     continue
                 if self.in_bounds(x+dx, y+dy, z):
                     self.set_state(x+dx, y+dy, z, State.PROTECTED)
+
+    def rand_pos2d(self):
+        return random.randint(0, self.dimensions[0]-1), random.randint(0, self.dimensions[1]-1)
+
+    def rand_pos3d(self):
+        return (random.randint(0, self.dimensions[0]-1), random.randint(0, self.dimensions[1]-1),
+                random.randint(0, self.dimensions[2]-1))

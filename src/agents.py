@@ -21,66 +21,66 @@ class AgentType(Enum):
 class Heuristics:
 
     @staticmethod
-    def euclidean_squared_distance(c1, c2):
+    def euclidean_squared_distance(p1, p2):
         """
         Determines the euclidean squared distance between two cells in two dimensions.
-        :param c1: The first cell.
-        :param c2: The second cell.
+        :param p1: The first point.
+        :param p2: The second point.
         :return: The euclidean squared distance in two dimensions.
         """
-        dx, dy = c2.get_x()-c1.get_x(), c2.get_y()-c1.get_y()
+        dx, dy = p2[0] - p1[0], p2[1] - p1[1]
         return dx*dx+dy*dy
 
     @staticmethod
-    def euclidean3_squared_distance(c1, c2):
+    def euclidean3_squared_distance(p1, p2):
         """
         Determines the euclidean squared distance between two cells in three dimensions.
-        :param c1: The first cell.
-        :param c2: The second cell.
+        :param p1: The first point.
+        :param p2: The second  point.
         :return: The euclidean squared distance in three dimensions.
         """
-        dx, dy, dz = c2.get_x()-c1.get_x(), c2.get_y()-c1.get_y(), c2.get_z()-c1.get_z()
+        dx, dy, dz = p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]
         return dx*dx+dy*dy+dz*dz
 
     @staticmethod
-    def euclidean_distance(c1, c2):
+    def euclidean_distance(p1, p2):
         """
-        Determines the euclidean distance between two cells in two dimensions.
-        :param c1: The first cell.
-        :param c2: The second cell.
+        Determines the euclidean distance between two points in two dimensions.
+        :param p1: The first point.
+        :param p2: The second point.
         :return: The euclidean distance in two dimensions.
         """
-        return math.sqrt(Heuristics.euclidean_squared_distance(c1, c2))
+        return math.sqrt(Heuristics.euclidean_squared_distance(p1, p2))
 
     @staticmethod
-    def euclidean3_distance(c1, c2):
+    def euclidean3_distance(p1, p2):
         """
-        Determines the euclidean distance between two cells in three dimensions.
-        :param c1: The first cell.
-        :param c2: The second cell.
+        Determines the euclidean distance between two points in three dimensions.
+        :param p1: The first point.
+        :param p2: The second point.
         :return: The euclidean distance in three dimensions.
         """
-        return math.sqrt(Heuristics.euclidean3_squared_distance(c1, c2))
+        return math.sqrt(Heuristics.euclidean3_squared_distance(p1, p2))
 
     @staticmethod
-    def manhattan_distance(c1, c2):
+    def manhattan_distance(p1, p2):
         """
-        Calculates the manhattan distance between two cells in two dimensions.
-        :param c1: The first cell.
-        :param c2: The second cell.
+        Calculates the manhattan distance between two points in two dimensions.
+        :param p1: The first point.
+        :param p2: The second point.
         :return: The manhattan distance in two dimensions.
         """
-        return (c2.get_x() - c1.get_x()) + (c2.get_y() - c1.get_y())
+        return (p2[0] - p1[0]) + (p2[1] - p1[1])
 
     @staticmethod
-    def manhattan3_distance(c1, c2):
+    def manhattan3_distance(p1, p2):
         """
-        Calculates the manhattan distance between two cells in three dimensions.
-        :param c1: The first cell.
-        :param c2: The second cell.
+        Calculates the manhattan distance between two points in three dimensions.
+        :param p1: The first point.
+        :param p2: The second point.
         :return: The manhattan distance in three dimensions.
         """
-        return (c2.get_x() - c1.get_x()) + (c2.get_y() - c1.get_y()) + (c2.get_z() - c1.get_z())
+        return (p2[0] - p1[0]) + (p2[1] - p1[1]) + (p2[2] - p1[2])
 
 class Cell3D:
 
@@ -224,7 +224,8 @@ class Agent:
         node = end.get_parent()
         while node.get_parent():
             path.append(node)
-            self.world.set_state(node.get_x(), node.get_y(), node.get_z(), worlds.State.PATH)
+            if not node.get_coordinates() == self.get_world().get_start():
+                self.world.set_state(node.get_x(), node.get_y(), node.get_z(), worlds.State.PATH)
             node = node.get_parent()
 
         return path.reverse()
@@ -290,8 +291,23 @@ class AStarSearchAgent(SearchAgent):
                 self.closed_list.add(current)
                 for neighbor in self.get_neighbors(current):
                     neighbor.set_gscore = current.get_gscore() + 1
-                    neighbor.set_hscore = Heuristics.euclidean3_distance(current, neighbor)
-                    neighbor.set_fscore = neighbor.get_gscore() + neighbor.get_fscore()
+                    if self.get_world().is_goal_area(neighbor.get_z()):
+                        neighbor.set_hscore(Heuristics.euclidean3_distance(neighbor.get_coordinates(),
+                                                                          self.get_world().get_goal()))
+                    else:
+                        if self.get_world().get_goal()[2] > neighbor.get_z():
+                            # Set levels upper transition as goal
+                            neighbor.set_hscore(Heuristics.euclidean3_distance(neighbor.get_coordinates(),
+                                                                              self.get_world().get_transitions_by_floor(
+                                                                                  neighbor.get_z())[
+                                                                                  worlds.TransitionType.TRANSITION_UPPER]))
+                        elif self.get_world().get_goal()[2] < neighbor.get_z():
+                            # Set levels lower transition as goal
+                            neighbor.set_hscore(Heuristics.euclidean3_distance(neighbor.get_coordinates(),
+                                                                              self.get_world().get_transitions_by_floor(
+                                                                                  neighbor.get_z())[
+                                                                                  worlds.TransitionType.TRANSITION_LOWER]))
+                        neighbor.set_fscore = neighbor.get_gscore() + neighbor.get_fscore()
                     self.open_list.put_nowait(neighbor)
 
         return None
