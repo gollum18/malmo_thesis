@@ -1,7 +1,7 @@
 import worlds
 
 
-class Cell:
+class Cell3D:
 
     def __init__(self, x, y, z, parent):
         """
@@ -15,6 +15,15 @@ class Cell:
         self.y = y
         self.z = z
         self.parent = parent
+
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __hash__(self):
+        return hash((self.x, self.y, self.z))
+
+    def __str__(self):
+        return "Cell3D: ({0}, {1}, {2})".format(self.x, self.y, self.z)
 
     def get_coordinates(self):
         """
@@ -58,3 +67,41 @@ class Cell:
         :return: Does not return.
         """
         self.parent = parent
+
+
+class Cell3DWithCosts(Cell3D):
+
+    def __init__(self, x, y, z, parent):
+        """
+        Creates a 3d cell acceptable for use with an algorithm that uses costs/heuristics like A*.
+        :param x:
+        :param y:
+        :param z:
+        :param parent:
+        """
+        Cell3D.__init__(self, x, y, z, parent)
+        self.f_score = 0.0
+        self.g_score = 0.0
+        self.h_score = 0.0
+
+    def __str__(self):
+        return "Cell3D: ({0}, {1}, {2}\nF: {3}, G: {4}, H: {5})".format(self.x, self.y, self.z,
+                                        self.f_score, self.g_score, self.h_score)
+
+    def get_fscore(self):
+        return self.f_score
+
+    def get_gscore(self):
+        return self.g_score
+
+    def get_hscore(self):
+        return self.h_score
+
+    def set_fscore(self, score):
+        self.f_score = score
+
+    def set_gscore(self, score):
+        self.g_score = score
+
+    def set_hscore(self, score):
+        self.h_score = score
