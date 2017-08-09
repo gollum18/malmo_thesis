@@ -1,5 +1,10 @@
+from enum import Enum
+from collections import deque
 import worlds
 
+class AgentType(Enum):
+    DISCRETE = 0
+    CONTINUOUS = 1
 
 class Cell3D:
 
@@ -105,3 +110,116 @@ class Cell3DWithCosts(Cell3D):
 
     def set_hscore(self, score):
         self.h_score = score
+
+
+class Agent:
+
+    def __init__(self, world, type):
+        self.world = world
+        self.type = type
+
+    def get_agent_type(self):
+        return type
+
+    def get_world(self):
+        return self.world
+
+    def set_world(self, world):
+        self.world = world
+
+    def reconstruct_path(self, end):
+        path = []
+
+        node = end.get_parent()
+        while node.get_parent():
+            path.append(node)
+            self.world.set_state(node.get_x(), node.get_y(), node.get_z(), worlds.State.PATH)
+            node = node.get_parent()
+
+        return path.reverse()
+
+    def get_neighbors(self, cell):
+        x, y, z = cell.x, cell.y, cell.z
+        neighbors = []
+
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0:
+                    continue
+                if self.world.in_bounds(x + dx, y + dy, z) and self.world.get_state(x, y, z) != worlds.State.BLOCKED:
+                    neighbors.append(Cell3D(x + dx, y + dy, z, cell))
+        if self.world.get_transition_type(x, y, z) == worlds.TransitionType.TRANSITION_UPPER:
+            neighbors.append(Cell3D(x, y, z + 1, cell))
+        elif self.world.get_transition_type(x, y, z) == worlds.TransitionType.TRANSITION_LOWER:
+            neighbors.append(Cell3D(x, y, z - 1, cell))
+        return neighbors
+
+
+class SearchAgent(Agent):
+
+    def __init__(self, world, type):
+        if type != AgentType.CONTINUOUS and type != AgentType.DISCRETE:
+            raise ValueError
+        Agent.__init__(self, world, type)
+        self.open_list = None
+        self.closed_list = None
+
+    def get_open_list(self):
+        return self.open_list
+
+    def get_closed_list(self):
+        return self.closed_list
+
+
+class BreadthFirstSearchAgent(SearchAgent):
+
+    def __init__(self, world, type):
+        SearchAgent.__init__(self, world, type)
+        self.open_list = deque()
+        self.closed_list = set()
+
+    def bfs(self):
+        x, y, z = self.world.get_start()
+        self.open_list.appendleft(Cell3D(x, y, z, None))
+
+        while self.open_list:
+            current = self.open_list.pop()
+            if self.world.is_goal_position(current.get_coordinates()):
+                return self.reconstruct_path(current)
+            if current not in self.closed_list:
+                self.closed_list.add(current)
+                for neighbor in self.get_neighbors(current):
+                    self.open_list.appendleft(neighbor)
+
+        return None
+
+class DepthFirstSearchAgent(SearchAgent):
+
+    def __init__(self, world, type):
+        SearchAgent.__init__(self, world, type)
+        self.open_list = []
+        self.closed_list = set()
+
+    def dfs(self):
+        x, y, z = self.world.get_start()
+        self.open_list.append(Cell3D(x, y, z, None))
+
+        while self.open_list:
+            current = self.open_list.pop()
+            if self.world.is_goal_position(current.get_coordinates()):
+                return self.reconstruct_path(current)
+            if current not in self.closed_list:
+                self.closed_list.add(current)
+                for neighbor in self.get_neighbors(current):
+                    self.open_list.append(neighbor)
+
+        return None
+
+bfs_agent = BreadthFirstSearchAgent(worlds.World3D(10, 10, 3, (0, 0, 0), (5, 5, 2), 30), AgentType.DISCRETE)
+dfs_agent = DepthFirstSearchAgent(worlds.World3D(10, 10, 3, (0, 0, 0), (5, 5, 2), 30), AgentType.DISCRETE)
+
+bfs_agent.bfs()
+dfs_agent.dfs()
+
+print bfs_agent.get_world()
+print dfs_agent.get_world()
