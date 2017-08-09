@@ -1,10 +1,86 @@
 from enum import Enum
 from collections import deque
+from Queue import PriorityQueue
 import worlds
+import random
+import math
+
+
+# CONSTANTS
+X_LIM = 10
+Y_LIM = 10
+Z_LIM = 5
+NUM_OBS = 50
+
 
 class AgentType(Enum):
-    DISCRETE = 0
-    CONTINUOUS = 1
+    NON_HEURISTIC = 0
+    HEURISTIC = 1
+
+
+class Heuristics:
+
+    @staticmethod
+    def euclidean_squared_distance(c1, c2):
+        """
+        Determines the euclidean squared distance between two cells in two dimensions.
+        :param c1: The first cell.
+        :param c2: The second cell.
+        :return: The euclidean squared distance in two dimensions.
+        """
+        dx, dy = c2.get_x()-c1.get_x(), c2.get_y()-c1.get_y()
+        return dx*dx+dy*dy
+
+    @staticmethod
+    def euclidean3_squared_distance(c1, c2):
+        """
+        Determines the euclidean squared distance between two cells in three dimensions.
+        :param c1: The first cell.
+        :param c2: The second cell.
+        :return: The euclidean squared distance in three dimensions.
+        """
+        dx, dy, dz = c2.get_x()-c1.get_x(), c2.get_y()-c1.get_y(), c2.get_z()-c1.get_z()
+        return dx*dx+dy*dy+dz*dz
+
+    @staticmethod
+    def euclidean_distance(c1, c2):
+        """
+        Determines the euclidean distance between two cells in two dimensions.
+        :param c1: The first cell.
+        :param c2: The second cell.
+        :return: The euclidean distance in two dimensions.
+        """
+        return math.sqrt(Heuristics.euclidean_squared_distance(c1, c2))
+
+    @staticmethod
+    def euclidean3_distance(c1, c2):
+        """
+        Determines the euclidean distance between two cells in three dimensions.
+        :param c1: The first cell.
+        :param c2: The second cell.
+        :return: The euclidean distance in three dimensions.
+        """
+        return math.sqrt(Heuristics.euclidean3_squared_distance(c1, c2))
+
+    @staticmethod
+    def manhattan_distance(c1, c2):
+        """
+        Calculates the manhattan distance between two cells in two dimensions.
+        :param c1: The first cell.
+        :param c2: The second cell.
+        :return: The manhattan distance in two dimensions.
+        """
+        return (c2.get_x() - c1.get_x()) + (c2.get_y() - c1.get_y())
+
+    @staticmethod
+    def manhattan3_distance(c1, c2):
+        """
+        Calculates the manhattan distance between two cells in three dimensions.
+        :param c1: The first cell.
+        :param c2: The second cell.
+        :return: The manhattan distance in three dimensions.
+        """
+        return (c2.get_x() - c1.get_x()) + (c2.get_y() - c1.get_y()) + (c2.get_z() - c1.get_z())
 
 class Cell3D:
 
@@ -23,6 +99,9 @@ class Cell3D:
 
     def __eq__(self, other):
         return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other):
+        return not self.x == other.x and self.y == other.y and self.z == other.z
 
     def __hash__(self):
         return hash((self.x, self.y, self.z))
@@ -93,6 +172,18 @@ class Cell3DWithCosts(Cell3D):
         return "Cell3D: ({0}, {1}, {2}\nF: {3}, G: {4}, H: {5})".format(self.x, self.y, self.z,
                                         self.f_score, self.g_score, self.h_score)
 
+    def __lt__(self, other):
+        return self.f_score < other.f_score
+
+    def __le__(self, other):
+        return self.f_score <= other.f_score
+
+    def __gt__(self, other):
+        return self.f_score > other.f_score
+
+    def __ge__(self, other):
+        return self.f_score >= other.f_score
+
     def get_fscore(self):
         return self.f_score
 
@@ -138,27 +229,11 @@ class Agent:
 
         return path.reverse()
 
-    def get_neighbors(self, cell):
-        x, y, z = cell.x, cell.y, cell.z
-        neighbors = []
-
-        for dx in [-1, 0, 1]:
-            for dy in [-1, 0, 1]:
-                if dx == 0 and dy == 0:
-                    continue
-                if self.world.in_bounds(x + dx, y + dy, z) and self.world.get_state(x, y, z) != worlds.State.BLOCKED:
-                    neighbors.append(Cell3D(x + dx, y + dy, z, cell))
-        if self.world.get_transition_type(x, y, z) == worlds.TransitionType.TRANSITION_UPPER:
-            neighbors.append(Cell3D(x, y, z + 1, cell))
-        elif self.world.get_transition_type(x, y, z) == worlds.TransitionType.TRANSITION_LOWER:
-            neighbors.append(Cell3D(x, y, z - 1, cell))
-        return neighbors
-
 
 class SearchAgent(Agent):
 
     def __init__(self, world, type):
-        if type != AgentType.CONTINUOUS and type != AgentType.DISCRETE:
+        if type != AgentType.NON_HEURISTIC and type != AgentType.HEURISTIC:
             raise ValueError
         Agent.__init__(self, world, type)
         self.open_list = None
@@ -170,6 +245,56 @@ class SearchAgent(Agent):
     def get_closed_list(self):
         return self.closed_list
 
+    def get_neighbors(self, cell):
+        x, y, z = cell.x, cell.y, cell.z
+        neighbors = []
+
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                if dx == 0 and dy == 0:
+                    continue
+                if self.world.in_bounds(x + dx, y + dy, z) and self.world.get_state(x, y, z) != worlds.State.BLOCKED:
+                    if self.get_agent_type() == AgentType.NON_HEURISTIC:
+                        neighbors.append(Cell3D(x + dx, y + dy, z, cell))
+                    else:
+                        neighbors.append(Cell3DWithCosts(x + dx, y + dy, z, cell))
+        if self.world.get_transition_type(x, y, z) == worlds.TransitionType.TRANSITION_UPPER:
+            if self.get_agent_type() == AgentType.NON_HEURISTIC:
+                neighbors.append(Cell3D(x, y, z + 1, cell))
+            else:
+                neighbors.append(Cell3DWithCosts(x, y, z + 1, cell))
+        elif self.world.get_transition_type(x, y, z) == worlds.TransitionType.TRANSITION_LOWER:
+            if self.get_agent_type() == AgentType.NON_HEURISTIC:
+                neighbors.append(Cell3D(x, y, z - 1, cell))
+            else:
+                neighbors.append(Cell3DWithCosts(x, y, z - 1, cell))
+        return neighbors
+
+
+class AStarSearchAgent(SearchAgent):
+
+    def __init__(self, world, type):
+        SearchAgent.__init__(self, world, type)
+        self.open_list = PriorityQueue()
+        self.closed_list = set()
+
+    def astar(self):
+        x, y, z = self.world.get_start()
+        self.open_list.put_nowait(Cell3DWithCosts(x, y, z, None))
+
+        while not self.open_list.empty():
+            current = self.open_list.get_nowait()
+            if self.world.is_goal_position(current.get_coordinates()):
+                return self.reconstruct_path(current)
+            if current not in self.closed_list:
+                self.closed_list.add(current)
+                for neighbor in self.get_neighbors(current):
+                    neighbor.set_gscore = current.get_gscore() + 1
+                    neighbor.set_hscore = Heuristics.euclidean3_distance(current, neighbor)
+                    neighbor.set_fscore = neighbor.get_gscore() + neighbor.get_fscore()
+                    self.open_list.put_nowait(neighbor)
+
+        return None
 
 class BreadthFirstSearchAgent(SearchAgent):
 
@@ -215,11 +340,19 @@ class DepthFirstSearchAgent(SearchAgent):
 
         return None
 
-bfs_agent = BreadthFirstSearchAgent(worlds.World3D(10, 10, 3, (0, 0, 0), (5, 5, 2), 30), AgentType.DISCRETE)
-dfs_agent = DepthFirstSearchAgent(worlds.World3D(10, 10, 3, (0, 0, 0), (5, 5, 2), 30), AgentType.DISCRETE)
+start = (random.randint(0, X_LIM-1),random.randint(0, Y_LIM-1), random.randint(0, Z_LIM-1))
+goal = (random.randint(0, X_LIM-1),random.randint(0, Y_LIM-1), random.randint(0, Z_LIM-1))
+bfs_agent = BreadthFirstSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.NON_HEURISTIC)
+dfs_agent = DepthFirstSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.NON_HEURISTIC)
+astar_agent = AStarSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.HEURISTIC)
 
 bfs_agent.bfs()
 dfs_agent.dfs()
+astar_agent.astar()
 
+print "BFS AGENT:"
 print bfs_agent.get_world()
+print "DFS AGENT"
 print dfs_agent.get_world()
+print "ASTAR AGENT"
+print astar_agent.get_world()
