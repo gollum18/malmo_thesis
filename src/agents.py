@@ -84,7 +84,7 @@ class Heuristics:
 
 class Cell3D:
 
-    def __init__(self, x, y, z, parent):
+    def __init__(self, x, y, z, parent=None):
         """
         Creates a cell. A cell is used by path planning algorithms to find paths.
         :param x: The x coordinate.
@@ -230,6 +230,84 @@ class Agent:
 
         return path.reverse()
 
+    def line_of_sight2d(self, c1, c2):
+        """
+        Determines if c2 is visible from c1. That is c1s' line of sight to c2 is obstacle free.
+        :param c1: The cell to check from.
+        :param c2: The cell to check against.
+        :return: True if there is line of sight. False otherwise.
+        """
+        if c1.get_z() != c2.get_z():
+            raise ValueError
+
+        xo, xt, yo, yt = c1.get_x(), c2.get_x(), c1.get_y(), c2.get_y()
+        dx, dy = xt - xo, yt - yo
+        sx, sy = 0, 0
+        f = 0
+
+        if dy < 0:
+            dy = -dy
+            sy = -1
+        else:
+            sy = 1
+
+        if dx < 0:
+            dx = -dx
+            sx = -1
+        else:
+            sx = 1
+
+        if dx >= dy:
+            while xo != xt:
+                f = f + dy# Get the new point
+                nx = xo + ((sx - 1) / 2)
+                ny = yo + ((sy - 1) / 2)
+                nz = c1.get_z()
+                # Case 1
+                if f >= dx:
+                    if (not self.get_world().in_bounds(nx, ny, nz) or
+                            self.get_world().get_state(nx, ny, nz) == worlds.State.BLOCKED):
+                        return False
+                    yo = yo + sy
+                    f = f - dx
+                # Case 2
+                if (f != 0 and (not self.get_world().in_bounds(nx, ny, nz) or
+                        self.get_world().get_state(nx, ny, nz) == worlds.State.BLOCKED)):
+                    return False
+                # Case 3
+                if (dy == 0 and (not self.get_world().in_bounds(nx, yo, nz) or
+                        self.get_world().get_state(nx, yo, nz) == worlds.State.BLOCKED) and
+                        (not self.get_world().in_bounds(nx, yo-1, nz) or
+                        self.get_world().get_state(nx, yo-1, nz) == worlds.State.BLOCKED)):
+                    return False
+                xo = xo + sx
+        else:
+            while yo != yt:
+                f = f + dx
+                # Get the new point
+                nx = xo + ((sx - 1) / 2)
+                ny = yo + ((sy - 1) / 2)
+                nz = c1.get_z()
+                # Case 1
+                if f >= dy:
+                    if (not self.get_world().in_bounds(nx, ny, nz) or
+                            self.get_world().get_state(nx, ny, nz) == worlds.State.BLOCKED):
+                        return False
+                    xo = xo + sx
+                    f = f - dy
+                # Case 2
+                if (f != 0 and (not self.get_world().in_bounds(nx, ny, nz) or
+                        self.get_world().get_state(nx, ny, nz) == worlds.State.BLOCKED)):
+                    return False
+                # Case 3
+                if (dy == 0 and (not self.get_world().in_bounds(xo, ny, nz) or
+                        self.get_world().get_state(xo, ny, nz) == worlds.State.BLOCKED) and
+                        (not self.get_world().in_bounds(xo-1, ny, nz) or
+                        self.get_world().get_state(xo-1, ny, nz) == worlds.State.BLOCKED)):
+                    return False
+                yo = yo + sy
+        return True
+
 
 class SearchAgent(Agent):
 
@@ -356,19 +434,105 @@ class DepthFirstSearchAgent(SearchAgent):
 
         return None
 
+
+class RapidlyExploringRandomTreeAgent(Agent):
+
+    def __init__(self, world, type, kmax, epsilon):
+        Agent.__init__(self, world, type)
+        self.max_nodes = kmax
+        self.max_dist = epsilon
+
+        # Generate the random node pool per level
+        # TODO: Maybe optimize?
+        self.available_nodes = {}
+        for z in range(self.get_world().get_dimensions()[2]):
+            nodes = []
+            for y in range(self.get_world().get_dimensions()[1]):
+                for x in range(self.get_world().get_dimensions()[0]):
+                    if self.get_world().get_state(x, y, z) == worlds.State.OPEN:
+                        nodes.append(Cell3D(x, y, z))
+                self.available_nodes[z] = nodes
+
+    def find_closest_cell_in_level(self, nodes, cell):
+        """
+        Determines the optimum parent for this node.
+        :param nodes: The list of all nodes in the tree.
+        :param cell: The cell to find the closest node to.
+        :return: The cell in the tree that is closest to the passed in cell.
+        """
+        z = cell.get_z()
+        mnode = None
+        mdist = float("inf")
+        for node in nodes:
+            # only care if the two cells share levels
+            if node.get_z() != z:
+                continue
+            value = Heuristics.euclidean_distance(cell.get_coordinates(), node.get_coordinates())
+            if value < mdist:
+                mnode = node
+                mdist = value
+        return mnode
+
+    def rrt(self):
+        # TODO: Fix rrt, it is currently looping 
+        current = Cell3D(self.get_world().get_start()[0],
+                         self.get_world().get_start()[1],
+                         self.get_world().get_start()[2])
+        nodes = []
+        while len(nodes) < self.max_nodes:
+            candidate = random.choice(self.available_nodes[current.get_z()])
+            # Perform the distance check
+            if Heuristics.euclidean_distance(current.get_coordinates(),
+                                             candidate.get_coordinates()) > self.max_dist:
+                continue
+            # Perform the los check
+            if self.line_of_sight2d(current, candidate):
+                candidate.set_parent(current)
+                # Perform the goal check
+                if self.get_world().is_goal_position(current.get_coordinates()):
+                    return self.reconstruct_path(current)
+                # Perform the transition check
+                if (self.get_world().get_transition_type(candidate.get_x(), candidate.get_y(), candidate.get_z()) ==
+                    worlds.TransitionType.TRANSITION_UPPER):
+                    cell = Cell3D(candidate.get_x(), candidate.get_y(), candidate.get_z() + 1, candidate)
+                    nodes.append(cell)
+                    if cell in self.available_nodes[candidate.get_z() + 1]:
+                        self.available_nodes[candidate.get_z() + 1].remove(cell)
+                    current = cell
+                elif (self.get_world().get_transition_type(candidate.get_x(), candidate.get_y(), candidate.get_z()) ==
+                    worlds.TransitionType.TRANSITION_LOWER):
+                    cell = Cell3D(candidate.get_x(), candidate.get_y(), candidate.get_z() - 1, candidate)
+                    nodes.append(cell)
+                    if cell in self.available_nodes[candidate.get_z() - 1]:
+                        self.available_nodes[candidate.get_z() - 1].remove(cell)
+                    current = cell
+                else:
+                    current = candidate
+                    nodes.append(current)
+                    self.available_nodes[current.get_z()].remove(current)
+        return None
+
+
 start = (random.randint(0, X_LIM-1),random.randint(0, Y_LIM-1), random.randint(0, Z_LIM-1))
 goal = (random.randint(0, X_LIM-1),random.randint(0, Y_LIM-1), random.randint(0, Z_LIM-1))
-bfs_agent = BreadthFirstSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.NON_HEURISTIC)
-dfs_agent = DepthFirstSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.NON_HEURISTIC)
-astar_agent = AStarSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.HEURISTIC)
+# bfs_agent = BreadthFirstSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.NON_HEURISTIC)
+# dfs_agent = DepthFirstSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.NON_HEURISTIC)
+# astar_agent = AStarSearchAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS), AgentType.HEURISTIC)
+#
+# bfs_agent.bfs()
+# dfs_agent.dfs()
+# astar_agent.astar()
+#
+# print "BFS AGENT:"
+# print bfs_agent.get_world()
+# print "DFS AGENT"
+# print dfs_agent.get_world()
+# print "ASTAR AGENT"
+# print astar_agent.get_world()
 
-bfs_agent.bfs()
-dfs_agent.dfs()
-astar_agent.astar()
+rrt_agent = RapidlyExploringRandomTreeAgent(worlds.World3D(X_LIM, Y_LIM, Z_LIM, start, goal, NUM_OBS),
+                                            AgentType.HEURISTIC, 500, 2.0)
+rrt_agent.rrt()
 
-print "BFS AGENT:"
-print bfs_agent.get_world()
-print "DFS AGENT"
-print dfs_agent.get_world()
-print "ASTAR AGENT"
-print astar_agent.get_world()
+print rrt_agent
+print rrt_agent.get_world()

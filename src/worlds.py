@@ -137,6 +137,9 @@ class World3D:
     # Accessors/Mutators
     #
 
+    def get_dimensions(self):
+        return self.dimensions
+
     def get_state(self, x, y, z):
         return self.world[z][y][x][0]
 
