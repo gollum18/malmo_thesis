@@ -180,28 +180,6 @@ class BreadthFirstSearchAgent(SearchAgent):
 
     def bfs(self):
         x, y, z = self.world.get_start()
-        self.open_list.appendleft(Cell3D(x, y, z, None))
-
-        while self.open_list:
-            current = self.open_list.pop()
-            if self.world.is_goal_position(current.get_coordinates()):
-                return self.reconstruct_path(current)
-            if current not in self.closed_list:
-                self.closed_list.add(current)
-                for neighbor in self.get_neighbors(current):
-                    self.open_list.appendleft(neighbor)
-
-        return None
-
-class DepthFirstSearchAgent(SearchAgent):
-
-    def __init__(self, world, type):
-        SearchAgent.__init__(self, world, type)
-        self.open_list = []
-        self.closed_list = set()
-
-    def dfs(self):
-        x, y, z = self.world.get_start()
         self.open_list.append(Cell3D(x, y, z, None))
 
         while self.open_list:
@@ -212,6 +190,28 @@ class DepthFirstSearchAgent(SearchAgent):
                 self.closed_list.add(current)
                 for neighbor in self.get_neighbors(current):
                     self.open_list.append(neighbor)
+
+        return None
+
+class DepthFirstSearchAgent(SearchAgent):
+
+    def __init__(self, world, type):
+        SearchAgent.__init__(self, world, type)
+        self.open_list = deque()
+        self.closed_list = set()
+
+    def dfs(self):
+        x, y, z = self.world.get_start()
+        self.open_list.appendleft(Cell3D(x, y, z, None))
+
+        while self.open_list:
+            current = self.open_list.pop()
+            if self.world.is_goal_position(current.get_coordinates()):
+                return self.reconstruct_path(current)
+            if current not in self.closed_list:
+                self.closed_list.add(current)
+                for neighbor in self.get_neighbors(current):
+                    self.open_list.appendleft(neighbor)
 
         return None
 
