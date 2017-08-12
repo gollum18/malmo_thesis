@@ -16,7 +16,7 @@ class StopWatch:
 
 class DynamicGrid(OctileGrid):
 
-    def __init__(self, x_dim, y_dim, z_dim, start=None, goal=None, percent_obs=0.30, percent_enemies=.05):
+    def __init__(self, x_dim, y_dim, z_dim, start=None, goal=None, percent_obs=0.20, percent_enemies=.01):
         """
         Creates a dynamic grid world.
         :param x_dim: The maximum width(x) of the search grid.
