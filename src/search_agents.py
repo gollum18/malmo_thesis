@@ -85,6 +85,7 @@ class ClassicalSearchAgents:
                     open_list.put_nowait(cell)
         return None
 
+
     @staticmethod
     def bfs(grid):
         """
@@ -128,6 +129,49 @@ class ClassicalSearchAgents:
         return None
 
 
+    @staticmethod
+    def dijkstra(grid):
+        """
+        Runs Dijkstras search algorithm on a 3D grid world. Identical to A* with a heuristic of 0.
+        :param grid: The grid world to search.
+        :return: The best path as determined by Dijkstras search.
+        """
+        open_list = PriorityQueue()
+        open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+        closed_list = set()
+
+        while open_list:
+            current = open_list.get_nowait()
+            if grid.is_goal_cell(current):
+                return reconstruct_path(grid, current)
+            if current not in closed_list:
+                closed_list.add(current)
+                for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
+                    cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
+                    cell.set_gscore(current.get_gscore() + 1)
+                    cell.set_fscore(cell.get_gscore() + cell.get_hscore())
+                    open_list.put_nowait(cell)
+        return None
+
+
+    @staticmethod
+    def kruskal(grid):
+        open_list = PriorityQueue()
+        open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+        closed_list = set()
+
+        while open_list:
+            current = open_list.get_nowait()
+            if grid.is_goal_cell(current):
+                return reconstruct_path(grid, current)
+            if current not in closed_list:
+                closed_list.add(current)
+                for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
+                    cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
+                    cell.set_fscore(octile3_heuristic(cell.get_position(), grid.get_goal()))
+                    open_list.put_nowait(cell)
+        return None
+
 class ModernSearchAgents:
 
     @staticmethod
@@ -148,6 +192,7 @@ class ModernSearchAgents:
         :param grid: The grid world to search.
         :return: The best as determined by RRT.
         """
+        ### Modified Implementation
         # start = grid.get_start()
         # anodes = grid.generate_available_positions()
         # nodes = [OctileCell(start[0], start[1], start[2])]
@@ -163,23 +208,39 @@ class ModernSearchAgents:
         #
         # return None
 
-        nodes = []
-        nodes.append(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
-        while num_nodes > 0:
-            rand = grid.rand3()
-            while grid.get_state(rand[0], rand[1], rand[2]) != OctileGrid.STATE_EMPTY:
-                rand = grid.rand3()
-            nn = nodes[0]
-            for p in nodes:
-                if octile3_heuristic(p.get_position(), rand) < octile3_heuristic(nn.get_position(), rand):
-                    nn = p
-            nc = step_from_to3(nn.get_position(), rand)
-            cell = OctileCell(nc[0], nc[1], nc[2], nn)
-            if cell not in nodes:
-                if grid.is_goal_cell(cell):
-                    return reconstruct_path(grid, cell)
-                nodes.append(cell)
-                num_nodes -= 1
+        ### Original Implementation
+        # nodes = []
+        # nodes.append(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+        # while num_nodes > 0:
+        #     rand = grid.rand3()
+        #     while grid.get_state(rand[0], rand[1], rand[2]) != OctileGrid.STATE_EMPTY:
+        #         rand = grid.rand3()
+        #     nn = nodes[0]
+        #     for p in nodes:
+        #         if octile3_heuristic(p.get_position(), rand) < octile3_heuristic(nn.get_position(), rand):
+        #             nn = p
+        #     nc = step_from_to3(nn.get_position(), rand)
+        #     cell = OctileCell(nc[0], nc[1], nc[2], nn)
+        #     if cell not in nodes:
+        #         if grid.is_goal_cell(cell):
+        #             return reconstruct_path(grid, cell)
+        #         nodes.append(cell)
+        #         num_nodes -= 1
+        # return None
+
+        ### Simplified Implementation
+        # This implementation randomly chooses a neighbor from a valid neighbors list for the current cell
+        # Should explore as quickly as the original algorithm while guaranteeing a path is returned, if there is one.
+        # This is accomplished without the expensive math calls of the original algorithm.
+        nodes = [OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2])]
+
+        for i in range(num_nodes):
+            for node in nodes:
+                if grid.is_goal_cell(node):
+                    return reconstruct_path(grid, node)
+                pos = random.choice(grid.generate_neighbors3(node.get_x(), node.get_y(), node.get_z()))
+                neighbor = OctileCell(pos[0], pos[1], pos[2], node)
+                nodes.append(neighbor)
         return None
 
-ModernSearchAgents.rrt(OctileGrid(x_dim=10, y_dim=10, z_dim=5, percent_obs=0), 300)
+ClassicalSearchAgents.kruskal(OctileGrid(x_dim=10, y_dim=10, z_dim=3, percent_obs=.30))
