@@ -171,14 +171,11 @@ class ModernSearchAgents:
                 rand = grid.rand3()
             nn = nodes[0]
             for p in nodes:
-                if grid.is_goal_cell(p):
-                    return reconstruct_path(grid, nn)
                 if octile3_heuristic(p.get_position(), rand) < octile3_heuristic(nn.get_position(), rand):
                     nn = p
             nc = step_from_to3(nn.get_position(), rand)
             cell = OctileCell(nc[0], nc[1], nc[2], nn)
             if cell not in nodes:
-                print cell
                 if grid.is_goal_cell(cell):
                     return reconstruct_path(grid, cell)
                 nodes.append(cell)
