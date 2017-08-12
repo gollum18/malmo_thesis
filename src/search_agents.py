@@ -2,7 +2,17 @@ from octile_grid import OctileGrid
 from octile_grid import OctileCell
 from collections import deque
 from Queue import PriorityQueue
-import math
+import math, random
+
+
+EPSILON = 7.0
+
+
+def euclidean3_heuristic(p1, p2):
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
+    dz = p2[2] - p1[2]
+    return math.sqrt(dx*dx+dy*dy+dz*dz)
 
 
 def octile3_heuristic(p1, p2):
@@ -36,6 +46,16 @@ def reconstruct_path(grid, end):
         current = current.get_parent()
     print grid
     return path.reverse()
+
+
+def step_from_to3(p1, p2):
+    if octile3_heuristic(p1, p2) < EPSILON:
+        return p2
+    else:
+        theta = math.atan2(p2[1] - p1[1], p2[0] - p1[0])
+        c = EPSILON*math.cos(theta)
+        s = EPSILON*math.sin(theta)
+        return int(math.fabs(p1[0] + c)), int(math.fabs(p1[1] + s)), int(math.fabs(p1[2] + (s)/(c)))
 
 
 class ClassicalSearchAgents:
@@ -110,7 +130,8 @@ class ClassicalSearchAgents:
 
 class ModernSearchAgents:
 
-    def qlearning(self, grid):
+    @staticmethod
+    def qlearning(grid):
         """
         Iteratively finds the best path to traverse a grid world using the reinforcement learning technique
         'Q-Learning'.
@@ -119,11 +140,49 @@ class ModernSearchAgents:
         """
         raise NotImplementedError
 
-    def rrt(self, grid):
+    @staticmethod
+    def rrt(grid, num_nodes):
         """
         Determines the optimal path through a grid world using a 3D version of Steven M. LaValles' Rapidly
         Exploring Random Tree algorithm.
         :param grid: The grid world to search.
         :return: The best as determined by RRT.
         """
-        raise NotImplementedError
+        # start = grid.get_start()
+        # anodes = grid.generate_available_positions()
+        # nodes = [OctileCell(start[0], start[1], start[2])]
+
+        # while anodes:
+        #     for node in nodes:
+        #         p = random.choice(anodes)
+        #         while octile3_heuristic(node.get_position(), p) > EPSILON:
+        #             p = random.choice(anodes)
+        #         nodes.append(OctileCell(p[0], p[1], p[2], node))
+        #         if grid.is_goal_cell(nodes[-1]):
+        #             return reconstruct_path(grid, nodes[-1])
+        #
+        # return None
+
+        nodes = []
+        nodes.append(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+        while num_nodes > 0:
+            rand = grid.rand3()
+            while grid.get_state(rand[0], rand[1], rand[2]) != OctileGrid.STATE_EMPTY:
+                rand = grid.rand3()
+            nn = nodes[0]
+            for p in nodes:
+                if grid.is_goal_cell(p):
+                    return reconstruct_path(grid, nn)
+                if octile3_heuristic(p.get_position(), rand) < octile3_heuristic(nn.get_position(), rand):
+                    nn = p
+            nc = step_from_to3(nn.get_position(), rand)
+            cell = OctileCell(nc[0], nc[1], nc[2], nn)
+            if cell not in nodes:
+                print cell
+                if grid.is_goal_cell(cell):
+                    return reconstruct_path(grid, cell)
+                nodes.append(cell)
+                num_nodes -= 1
+        return None
+
+ModernSearchAgents.rrt(OctileGrid(x_dim=10, y_dim=10, z_dim=5, percent_obs=0), 300)

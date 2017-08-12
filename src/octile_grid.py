@@ -16,6 +16,10 @@ class OctileCell:
         self.hscore = 0.0 # The guess of the cost remaining to the goal from this cell.
         self.parent = parent # The cell that created this cell.
 
+    def __str__(self):
+        return "({0}, {1}, {2}) : F={3}, G={4}, H={5}".format(self.pos[0], self.pos[1], self.pos[2],
+                         self.fscore, self.gscore, self.hscore)
+
     def __eq__(self, other):
         """
         Determines if two cells are equal to each other.
@@ -321,7 +325,8 @@ class OctileGrid:
         """
         if not self.is_valid_cell(x, y, z):
             raise ValueError
-        self.start = x, y, z
+        else:
+            self.start = x, y, z
 
     def get_state(self, x, y, z):
         """
@@ -334,7 +339,8 @@ class OctileGrid:
         """
         if self.in_bounds(x, y, z):
             return self.grid_z[z][y][x]
-        raise ValueError
+        else:
+            raise ValueError
 
     def set_state(self, x, y, z, state):
         """
@@ -348,7 +354,8 @@ class OctileGrid:
         """
         if self.in_bounds(x, y, z):
             self.grid_z[z][y][x] = state
-        raise ValueError
+        else:
+            raise ValueError
 
     def in_bounds(self, x, y, z):
         """
@@ -365,6 +372,16 @@ class OctileGrid:
         if z < 0 or z >= self.dimensions[2]:
             return False
         return True
+
+    def generate_available_positions(self):
+        locations = []
+        for z in range(self.dimensions[2]):
+            for y in range(self.dimensions[1]):
+                for x in range(self.dimensions[0]):
+                    if (self.get_state(x, y, z) != self.STATE_BLOCKED or
+                            self.get_state(x, y, z) != self.STATE_START):
+                        locations.append((x, y, z))
+        return locations
 
     def generate_neighbors3(self, x, y, z):
         """
