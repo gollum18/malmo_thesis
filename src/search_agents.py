@@ -253,7 +253,3 @@ class ModernSearchAgents:
                 neighbor = OctileCell(pos[0], pos[1], pos[2], node)
                 nodes.append(neighbor)
         return None
-
-grid = DynamicGrid(10, 10, 3)
-
-while grid.is_agent_alive():
