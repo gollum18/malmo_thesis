@@ -1,5 +1,6 @@
 from octile_grid import OctileGrid
 from octile_grid import OctileCell
+from dynamic_grid import DynamicGrid
 from collections import deque
 from Queue import PriorityQueue
 import math, random
@@ -243,4 +244,6 @@ class ModernSearchAgents:
                 nodes.append(neighbor)
         return None
 
-ClassicalSearchAgents.kruskal(OctileGrid(x_dim=10, y_dim=10, z_dim=3, percent_obs=.30))
+grid = DynamicGrid(10, 10, 3)
+
+print grid
