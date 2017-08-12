@@ -217,7 +217,6 @@ class OctileGrid:
         "DIR_BELOW_NORTHWEST": [-1, -1, -1]
     }
 
-
     def __init__(self, x_dim, y_dim, z_dim, start=None, goal=None, percent_obs=0.30):
         """
         Creates a three-dimensional grid world for testing three-dimensional search agents.
@@ -274,7 +273,6 @@ class OctileGrid:
             self.set_state(pos[0], pos[1], pos[2], self.STATE_BLOCKED)
             obs -= 1
 
-
     def __str__(self):
         s = "Printing octile grid with metrics (x-dimension={0}, y-dimension={1}, z-dimension={2})\n".format(
             self.dimensions[0], self.dimensions[1], self.dimensions[2]
@@ -289,14 +287,12 @@ class OctileGrid:
             s += "\n"
         return s
 
-
     def get_goal(self):
         """
         Gets the goal location for the search agent.
         :return: The goal location for the search agent.
         """
         return self.goal
-
 
     def set_goal(self, x, y, z):
         """
@@ -311,14 +307,12 @@ class OctileGrid:
             raise ValueError
         self.goal = x, y, z
 
-
     def get_start(self):
         """
         Gets the starting location for the search agent.
         :return: The starting location for the search agent.
         """
         return self.start
-
 
     def set_start(self, x, y, z):
         """
@@ -334,7 +328,6 @@ class OctileGrid:
         else:
             self.start = x, y, z
 
-
     def get_state(self, x, y, z):
         """
         Gets the state of the cell at the given location in the grid world.
@@ -348,7 +341,6 @@ class OctileGrid:
             return self.grid_z[z][y][x]
         else:
             raise ValueError
-
 
     def set_state(self, x, y, z, state):
         """
@@ -365,7 +357,6 @@ class OctileGrid:
         else:
             raise ValueError
 
-
     def in_bounds(self, x, y, z):
         """
         Determines whether a location is inside the grid world.
@@ -381,7 +372,6 @@ class OctileGrid:
         if z < 0 or z >= self.dimensions[2]:
             return False
         return True
-
 
     def generate_neighbors3(self, x, y, z):
         """
@@ -400,7 +390,6 @@ class OctileGrid:
 
         return neighbors
 
-
     def is_goal_cell(self, cell):
         """
         Determines if a given cell is a goal cell or not.
@@ -408,7 +397,6 @@ class OctileGrid:
         :return: True if the cell is the goal, False if not.
         """
         return cell.get_x() == self.goal[0] and cell.get_y() == self.goal[1] and cell.get_z() == self.goal[2]
-
 
     def is_valid_cell(self, x, y, z):
         """
@@ -420,7 +408,6 @@ class OctileGrid:
         :return: True if the cell is in bounds and not blocked, False otherwise.
         """
         return self.in_bounds(x, y, z) and self.get_state(x, y, z) != self.STATE_BLOCKED
-
 
     def move(self, x, y, z, direction):
         """
@@ -436,7 +423,6 @@ class OctileGrid:
             return x+dx, y+dy, z+dz
         return None
 
-
     def protect_cell2(self, x, y, z):
         """
         Protects cells directly adjacent to a cell that are on share the same z coordinate.
@@ -451,7 +437,6 @@ class OctileGrid:
                     continue
                 if self.in_bounds(x+dx, y+dy, z):
                     self.set_state(x+dx, y+dy, z, self.STATE_PROTECTED)
-
 
     def protect_cell3(self, x, y, z):
         """
@@ -469,7 +454,6 @@ class OctileGrid:
                     if self.in_bounds(x+dx, y+dy, z+dz):
                         self.set_state(x+dx, y+dy, z+dz, self.STATE_PROTECTED)
 
-
     def rand2(self):
         """
         Generates a random two-dimensional point within the bounds of the grid world.
@@ -477,7 +461,6 @@ class OctileGrid:
         """
         return (random.randint(0, self.dimensions[0] - 1),
                 random.randint(0, self.dimensions[1] - 1))
-
 
     def rand3(self):
         """
@@ -488,7 +471,6 @@ class OctileGrid:
                 random.randint(0, self.dimensions[1]-1),
                 random.randint(0, self.dimensions[2]-1))
 
-
     def reset_grid(self, path):
         """
         Resets the grid world back to its original state before the path was found.
@@ -497,7 +479,6 @@ class OctileGrid:
         """
         for cell in path:
             self.set_state(cell.get_x(), cell.get_y(), cell.get_z(), self.STATE_EMPTY)
-
 
     def state_string(self, state):
         """

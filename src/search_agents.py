@@ -62,30 +62,40 @@ def step_from_to3(p1, p2):
 class ClassicalSearchAgents:
 
     @staticmethod
-    def astar(grid):
+    def astar(grid, start, goal):
         """
         Runs the A* search algorithm on a 3D grid world.
         :param grid: The grid world to search.
+        :param start: The starting position to search outward from.
+        :param goal: The goal position to search for.
         :return: The best path as determined by A*.
         """
         open_list = PriorityQueue()
-        open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+        open_list.put_nowait(OctileCell(start[0], start[1], start[2]))
         closed_list = set()
 
         while open_list:
             current = open_list.get_nowait()
-            if grid.is_goal_cell(current):
+            if current.get_position() == goal:
                 return reconstruct_path(grid, current)
             if current not in closed_list:
                 closed_list.add(current)
                 for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
                     cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
                     cell.set_gscore(current.get_gscore() + 1)
-                    cell.set_hscore(octile3_heuristic(neighbor, grid.get_goal()))
+                    cell.set_hscore(octile3_heuristic(neighbor, goal))
                     cell.set_fscore(cell.get_gscore() + cell.get_hscore())
                     open_list.put_nowait(cell)
         return None
 
+    @staticmethod
+    def astar(grid):
+        """
+        Runs the A* search algorithm on a 3D grid world.
+        :param grid: The grid world to search.
+        :return: The best path as determined by A*.
+        """
+        return ClassicalSearchAgents.astar(grid, grid.get_start(), grid.get_goal())
 
     @staticmethod
     def bfs(grid):
@@ -246,4 +256,4 @@ class ModernSearchAgents:
 
 grid = DynamicGrid(10, 10, 3)
 
-print grid
+while grid.is_agent_alive():

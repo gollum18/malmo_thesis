@@ -4,14 +4,11 @@ import time
 
 class StopWatch:
 
-
     def __init__(self):
         self.current_time = time.time()
 
-
     def elapsed(self):
         return time.time()-self.current_time
-
 
     def reset(self):
         self.current_time = time.time()
@@ -45,7 +42,6 @@ class DynamicGrid(OctileGrid):
                 pos = self.rand3()
             self.agents.append(pos)
 
-
     def __str__(self):
         s = "Printing dynamic grid with metrics (x-dimension={0}, y-dimension={1}, z-dimension={2})\n".format(
             self.dimensions[0], self.dimensions[1], self.dimensions[2]
@@ -66,7 +62,6 @@ class DynamicGrid(OctileGrid):
             s += "\n"
         return s
 
-
     def get_agent_position(self):
         """
         Gets the position of the agent.
@@ -74,14 +69,12 @@ class DynamicGrid(OctileGrid):
         """
         return self.agents[0]
 
-
     def get_enemy_positions(self):
         """
         Gets a list containing all of the enemy positions.
         :return: A list containing all enemy positions.
         """
         return self.agents[1:-1]
-
 
     def generate_neighbors3(self, x, y, z):
         """
@@ -98,7 +91,7 @@ class DynamicGrid(OctileGrid):
             raise ValueError
 
         neighbors = []
-        enemies = self.agents[1:-1]
+        enemies = self.get_enemy_positions()
 
         # Generate valid neighbors for this cell
         for direction in self.Directions:
@@ -108,6 +101,15 @@ class DynamicGrid(OctileGrid):
 
         return neighbors
 
+    def is_agent_alive(self):
+        """
+        Determines if the agent is still alive.
+        :return: True if the agent does not share a cell with an enemy, False otherwise.
+        """
+        for agent in self.get_enemy_positions():
+            if self.agents[0] == agent:
+                return False
+        return True
 
     def move_agent(self, index, new_pos):
         """
