@@ -23,6 +23,8 @@ def octile3_heuristic(p1, p2):
     :param p1: The starting point.
     :param p2: The ending point.
     :return: The 3D Octile Distance between the two points.
+    Note: Do not use this heuristic for maps with less than 3 floors or you stand a chance of
+    it returning 0.
     """
     distances = sorted([math.fabs(p1[0] - p2[0]), # dx
                         math.fabs(p1[1] - p2[1]),  # dy
@@ -59,141 +61,121 @@ def step_from_to3(p1, p2):
         return int(math.fabs(p1[0] + c)), int(math.fabs(p1[1] + s)), int(math.fabs(p1[2] + (s)/(c)))
 
 
-class ClassicalSearchAgents:
+def _astar(grid, start, goal):
+    """
+    Runs the A* search algorithm on a 3D grid world.
+    :param grid: The grid world to search.
+    :param start: The starting position to search outward from.
+    :param goal: The goal position to search for.
+    :return: The best path as determined by A*.
+    """
+    open_list = PriorityQueue()
+    open_list.put_nowait(OctileCell(start[0], start[1], start[2]))
+    closed_list = set()
 
-    @staticmethod
-    def astar(grid, start, goal):
-        """
-        Runs the A* search algorithm on a 3D grid world.
-        :param grid: The grid world to search.
-        :param start: The starting position to search outward from.
-        :param goal: The goal position to search for.
-        :return: The best path as determined by A*.
-        """
-        open_list = PriorityQueue()
-        open_list.put_nowait(OctileCell(start[0], start[1], start[2]))
-        closed_list = set()
+    while open_list:
+        current = open_list.get_nowait()
+        if current.get_position() == goal:
+            return reconstruct_path(grid, current)
+        if current not in closed_list:
+            closed_list.add(current)
+            for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
+                cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
+                cell.set_gscore(current.get_gscore() + 1)
+                cell.set_hscore(octile3_heuristic(neighbor, goal))
+                cell.set_fscore(cell.get_gscore() + cell.get_hscore())
+                open_list.put_nowait(cell)
+    return None
 
-        while open_list:
-            current = open_list.get_nowait()
-            if current.get_position() == goal:
-                return reconstruct_path(grid, current)
-            if current not in closed_list:
-                closed_list.add(current)
-                for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
-                    cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
-                    cell.set_gscore(current.get_gscore() + 1)
-                    cell.set_hscore(octile3_heuristic(neighbor, goal))
-                    cell.set_fscore(cell.get_gscore() + cell.get_hscore())
-                    open_list.put_nowait(cell)
-        return None
+def astar(grid):
+    """
+    Runs the A* search algorithm on a 3D grid world.
+    :param grid: The grid world to search.
+    :return: The best path as determined by A*.
+    """
+    return _astar(grid, grid.get_start(), grid.get_goal())
 
-    @staticmethod
-    def astar(grid):
-        """
-        Runs the A* search algorithm on a 3D grid world.
-        :param grid: The grid world to search.
-        :return: The best path as determined by A*.
-        """
-        return ClassicalSearchAgents.astar(grid, grid.get_start(), grid.get_goal())
+def bfs(grid):
+    """
+    Runs the breadth-first search algorithm on a 3D grid world.
+    :param grid: The grid world to search.
+    :return: The best path as determined by breadth-first search.
+    """
+    open_list = deque()
+    open_list.append(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    closed_list = set()
 
-    @staticmethod
-    def bfs(grid):
-        """
-        Runs the breadth-first search algorithm on a 3D grid world.
-        :param grid: The grid world to search.
-        :return: The best path as determined by breadth-first search.
-        """
-        open_list = deque()
-        open_list.append(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
-        closed_list = set()
+    while open_list:
+        current = open_list.popleft()
+        if grid.is_goal_cell(current):
+            return reconstruct_path(grid, current)
+        if current not in closed_list:
+            closed_list.add(current)
+            for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
+                open_list.append(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
+    return None
 
-        while open_list:
-            current = open_list.popleft()
-            if grid.is_goal_cell(current):
-                return reconstruct_path(grid, current)
-            if current not in closed_list:
-                closed_list.add(current)
-                for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
-                    open_list.append(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
-        return None
+def dfs(grid):
+    """
+    Runs the depth-first search algorithm on a 3D grid world.
+    :param grid: The grid world to search.
+    :return: The best path as determined by breadth-first search.
+    """
+    open_list = deque()
+    open_list.appendleft(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    closed_list = set()
 
-    @staticmethod
-    def dfs(grid):
-        """
-        Runs the depth-first search algorithm on a 3D grid world.
-        :param grid: The grid world to search.
-        :return: The best path as determined by breadth-first search.
-        """
-        open_list = deque()
-        open_list.appendleft(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
-        closed_list = set()
+    while open_list:
+        current = open_list.popleft()
+        if grid.is_goal_cell(current):
+            return reconstruct_path(grid, current)
+        if current not in closed_list:
+            closed_list.add(current)
+            for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
+                open_list.appendleft(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
+    return None
 
-        while open_list:
-            current = open_list.popleft()
-            if grid.is_goal_cell(current):
-                return reconstruct_path(grid, current)
-            if current not in closed_list:
-                closed_list.add(current)
-                for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
-                    open_list.appendleft(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
-        return None
+def dijkstra(grid):
+    """
+    Runs Dijkstras search algorithm on a 3D grid world. Identical to A* with a heuristic of 0.
+    :param grid: The grid world to search.
+    :return: The best path as determined by Dijkstras search.
+    """
+    open_list = PriorityQueue()
+    open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    closed_list = set()
 
+    while open_list:
+        current = open_list.get_nowait()
+        if grid.is_goal_cell(current):
+            return reconstruct_path(grid, current)
+        if current not in closed_list:
+            closed_list.add(current)
+            for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
+                cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
+                cell.set_gscore(current.get_gscore() + 1)
+                cell.set_fscore(cell.get_gscore() + cell.get_hscore())
+                open_list.put_nowait(cell)
+    return None
 
-    @staticmethod
-    def dijkstra(grid):
-        """
-        Runs Dijkstras search algorithm on a 3D grid world. Identical to A* with a heuristic of 0.
-        :param grid: The grid world to search.
-        :return: The best path as determined by Dijkstras search.
-        """
-        open_list = PriorityQueue()
-        open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
-        closed_list = set()
+def kruskal(grid):
+    open_list = PriorityQueue()
+    open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    closed_list = set()
 
-        while open_list:
-            current = open_list.get_nowait()
-            if grid.is_goal_cell(current):
-                return reconstruct_path(grid, current)
-            if current not in closed_list:
-                closed_list.add(current)
-                for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
-                    cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
-                    cell.set_gscore(current.get_gscore() + 1)
-                    cell.set_fscore(cell.get_gscore() + cell.get_hscore())
-                    open_list.put_nowait(cell)
-        return None
-
-
-    @staticmethod
-    def kruskal(grid):
-        open_list = PriorityQueue()
-        open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
-        closed_list = set()
-
-        while open_list:
-            current = open_list.get_nowait()
-            if grid.is_goal_cell(current):
-                return reconstruct_path(grid, current)
-            if current not in closed_list:
-                closed_list.add(current)
-                for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
-                    cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
-                    cell.set_fscore(octile3_heuristic(cell.get_position(), grid.get_goal()))
-                    open_list.put_nowait(cell)
-        return None
+    while open_list:
+        current = open_list.get_nowait()
+        if grid.is_goal_cell(current):
+            return reconstruct_path(grid, current)
+        if current not in closed_list:
+            closed_list.add(current)
+            for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
+                cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
+                cell.set_fscore(octile3_heuristic(cell.get_position(), grid.get_goal()))
+                open_list.put_nowait(cell)
+    return None
 
 class ModernSearchAgents:
-
-    @staticmethod
-    def qlearning(grid):
-        """
-        Iteratively finds the best path to traverse a grid world using the reinforcement learning technique
-        'Q-Learning'.
-        :param grid: The grid world to search.
-        :return: The best path as determined by q-learning.
-        """
-        raise NotImplementedError
 
     @staticmethod
     def rrt(grid, num_nodes):
@@ -203,41 +185,6 @@ class ModernSearchAgents:
         :param grid: The grid world to search.
         :return: The best as determined by RRT.
         """
-        ### Modified Implementation
-        # start = grid.get_start()
-        # anodes = grid.generate_available_positions()
-        # nodes = [OctileCell(start[0], start[1], start[2])]
-
-        # while anodes:
-        #     for node in nodes:
-        #         p = random.choice(anodes)
-        #         while octile3_heuristic(node.get_position(), p) > EPSILON:
-        #             p = random.choice(anodes)
-        #         nodes.append(OctileCell(p[0], p[1], p[2], node))
-        #         if grid.is_goal_cell(nodes[-1]):
-        #             return reconstruct_path(grid, nodes[-1])
-        #
-        # return None
-
-        ### Original Implementation
-        # nodes = []
-        # nodes.append(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
-        # while num_nodes > 0:
-        #     rand = grid.rand3()
-        #     while grid.get_state(rand[0], rand[1], rand[2]) != OctileGrid.STATE_EMPTY:
-        #         rand = grid.rand3()
-        #     nn = nodes[0]
-        #     for p in nodes:
-        #         if octile3_heuristic(p.get_position(), rand) < octile3_heuristic(nn.get_position(), rand):
-        #             nn = p
-        #     nc = step_from_to3(nn.get_position(), rand)
-        #     cell = OctileCell(nc[0], nc[1], nc[2], nn)
-        #     if cell not in nodes:
-        #         if grid.is_goal_cell(cell):
-        #             return reconstruct_path(grid, cell)
-        #         nodes.append(cell)
-        #         num_nodes -= 1
-        # return None
 
         ### Simplified Implementation
         # This implementation randomly chooses a neighbor from a valid neighbors list for the current cell

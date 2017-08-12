@@ -46,6 +46,7 @@ class DynamicGrid(OctileGrid):
         s = "Printing dynamic grid with metrics (x-dimension={0}, y-dimension={1}, z-dimension={2})\n".format(
             self.dimensions[0], self.dimensions[1], self.dimensions[2]
         )
+        is_enemy = False
         for z in range(self.dimensions[2]):
             s += "Level {0}:\n".format(z)
             for y in range(self.dimensions[1]):
@@ -53,7 +54,13 @@ class DynamicGrid(OctileGrid):
                 for x in range(self.dimensions[0]):
                     if (x, y, z) in self.agents:
                         if self.agents.index((x, y, z)) == 0:
-                            s += "A|"
+                            for enemy in self.get_enemy_positions():
+                                if (x, y, z) == enemy:
+                                    is_enemy = True
+                                    s += "E|"
+                                    continue
+                            if not is_enemy:
+                                s += "A|"
                         else:
                             s += "E|"
                     else:
@@ -75,6 +82,13 @@ class DynamicGrid(OctileGrid):
         :return: A list containing all enemy positions.
         """
         return self.agents[1:-1]
+
+    def get_num_agents(self):
+        """
+        Gets the number of agents in the grid world.
+        :return: Number of agents in the grid world.
+        """
+        return len(self.agents)
 
     def generate_neighbors3(self, x, y, z):
         """
