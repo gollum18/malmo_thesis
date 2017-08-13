@@ -10,6 +10,13 @@ EPSILON = 7.0
 
 
 def euclidean3_heuristic(p1, p2):
+    """
+    Determines the 3D Euclidean Distance from the first point to the second point. This is the same distance
+    equation most students learn in Calculus III.
+    :param p1: The starting point.
+    :param p2: The ending point.
+    :return: The 3D Euclidean Distance between the two points.
+    """
     dx = p2[0] - p1[0]
     dy = p2[1] - p1[1]
     dz = p2[2] - p1[2]
@@ -19,7 +26,8 @@ def euclidean3_heuristic(p1, p2):
 def octile3_heuristic(p1, p2):
     """
     Determines the 3D Octile Distance from the first point to the second point as specified in
-    Alex Nashs' Ph.D. Thesis 'Any-Angle Path Planning' on pg. 112.
+    Alex Nashs' Ph.D. Thesis 'Any-Angle Path Planning' on pg. 112. This distance metric is more suited for
+    a wider range of movement than euclidean distance.
     :param p1: The starting point.
     :param p2: The ending point.
     :return: The 3D Octile Distance between the two points.
