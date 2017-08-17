@@ -44,13 +44,28 @@ class Node:
         """
         Recursive function used to get a value at a specific position in the list.
         :param index: The index of the item in the list.
-        :return: The value at the index in the list. None if the index is out of range of the length of the list.
+        :return: The value at the index in the list.
+        :raises: KeyError if the index is out of range.
         """
         if index == 0:
             return self.get_value()
         if self.get_next():
             return self.get_next().get(index-1)
-        return None
+        raise KeyError
+
+    def set(self, index, value):
+        """
+        Sets the value at the specified index to the new value.
+        :param index: The index to update.
+        :param value: The new value to update to.
+        :return: Nothing.
+        :raises: KeyError if the index is out of range.
+        """
+        if index == 0:
+            self.set_value(value)
+        if self.get_next():
+            self.get_next().set(index-1, value)
+        raise KeyError
 
     def get_next(self):
         """
@@ -155,7 +170,7 @@ class LinkedList:
         if self.head:
             # Case 1: First item is what is being removed
             if self.head.get_value() == value:
-                self.head = self.get_next()
+                self.head = self.head.get_next()
                 return True
             # Case 2: Item is somewhere in the list, search for it
             previous = self.head
@@ -167,6 +182,15 @@ class LinkedList:
                 previous = current
         return False
 
+    def set(self, index, value):
+        """
+        Sets the value at the specified index to the new value.
+        :param index: The index to update.
+        :param value: The value to update to.
+        :return: Nothing
+        """
+        if self.head:
+            self.head.set(index, value)
 
 class Queue(LinkedList):
 
@@ -178,11 +202,11 @@ class Queue(LinkedList):
 
     def add(self, value):
         """
-        Not implemented for a queue. Calling this will raise an error.
+        Not implemented for a queue.
         :param value: N/A
         :return: Nothing
         """
-        raise NotImplementedError
+        pass
 
     def dequeue(self):
         """
@@ -216,19 +240,28 @@ class Queue(LinkedList):
 
     def get(self, index):
         """
-        Not implemented for a queue. Calling this will raise an error.
+        Not implemented for a queue.
         :param index: N/A
         :return: Nothing
         """
-        raise NotImplementedError
+        pass
 
     def remove(self, value):
         """
-        Not implemented for a queue. Calling this will raise an error.
+        Not implemented for a queue.
         :param value: N/A
         :return: Nothing
         """
-        raise NotImplementedError
+        pass
+
+    def set(self, index, value):
+        """
+        Not implemented for a queue.
+        :param index: N/A
+        :param value: N/A
+        :return: Nothing
+        """
+        pass
 
 
 class Stack(LinkedList):
@@ -241,19 +274,19 @@ class Stack(LinkedList):
 
     def add(self, value):
         """
-        Not implemented for a stack. Calling this will raise an error.
+        Not implemented for a stack.
         :param value: N/A
         :return: Nothing
         """
-        raise NotImplementedError
+        pass
 
     def get(self, index):
         """
-        Not implemented for a stack. Calling this will raise an error.
+        Not implemented for a stack.
         :param index: N/A
         :return: Nothing
         """
-        raise NotImplementedError
+        pass
 
     def peek(self):
         """
@@ -285,28 +318,23 @@ class Stack(LinkedList):
 
     def remove(self, value):
         """
-        Not implemented for a stack. Calling will raise an error.
+        Not implemented for a stack.
         :param value: N/A
         :return: Nothing
         """
-        raise NotImplementedError
+        pass
+
+    def set(self, index, value):
+        """
+        Not implemented for a stack.
+        :param index: N/A
+        :param value: N/A
+        :return: Nothing
+        """
+        pass
 
 def main():
-    list = LinkedList()
-    queue = Queue()
-    stack = Stack()
-
-    for i in range(100):
-        list.add(i)
-        queue.enqueue(i)
-        stack.push(i)
-
-    print("LinkedList: ")
-    print(list)
-    print("Queue: ")
-    print(queue)
-    print("Stack: ")
-    print(stack)
+    pass
 
 if __name__ == '__main__':
     main()
