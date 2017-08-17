@@ -98,6 +98,43 @@ class Node:
         self.value = value
 
 
+class PriorityNode(Node):
+
+    def __init__(self, priority, value):
+        """
+        Creates a specialized node for use in a priority queue.
+        :param priority: The priority assigned to this node.
+        :param value: The value that corresponds to this node.
+        """
+        Node.__init__(self, value)
+        self.priority = priority
+
+    def __str__(self):
+        """
+        Gets a string representation of this node.
+        :return: A string representing this node.
+        """
+        if self.get_next():
+            return "{0}:{1}, {2}".format(self.get_priority(), self.get_value(), self.get_next().__str__())
+        else:
+            return "{0}:{1}]".format(self.get_priority(), self.get_value())
+
+    def get_priority(self):
+        """
+        Returns the priority assigned to this node.
+        :return: The priority of this node.
+        """
+        return self.priority
+
+    def set_priority(self, priority):
+        """
+        Updates the priority of this node.
+        :param priority: The new priority for this node.
+        :return: Nothing
+        """
+        self.priority = priority
+
+
 class LinkedList:
 
     def __init__(self):
@@ -264,6 +301,31 @@ class Queue(LinkedList):
         pass
 
 
+class PriorityQueue(Queue):
+    def __init__(self):
+        Queue.__init__(self)
+
+    def enqueue(self, priority, value):
+        if not self.head:
+            node = PriorityNode(priority, value)
+            self.head = node
+        else:
+            previous = None
+            current = self.head
+            while current.get_next() and current.get_priority() < priority:
+                previous = current
+                current = current.get_next()
+            # Check for end of queue
+            if not current.get_next():
+                node = PriorityNode(priority, value)
+                current.set_next(node)
+            # Otherwise we got out by reaching a larger priority
+            else:
+                node = PriorityNode(priority, value)
+                node.set_next(current.get_next())
+                current.set_next(node)
+
+
 class Stack(LinkedList):
 
     def __init__(self):
@@ -334,7 +396,12 @@ class Stack(LinkedList):
         pass
 
 def main():
-    pass
+    import random
+
+    pq = PriorityQueue()
+    for i in range(10):
+        pq.enqueue(random.random()*10, i)
+    print(pq)
 
 if __name__ == '__main__':
     main()
