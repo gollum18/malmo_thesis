@@ -55,4 +55,12 @@ def dynamic_test(grid):
 
     print grid
 
-dynamic_test(DynamicGrid(10, 10, 3))
+def static_test(grid):
+    agent = astar(grid)
+    print agent
+
+def main():
+    static_test(OctileGrid(10, 10, 3))
+
+if __name__ == '__main__':
+    main()

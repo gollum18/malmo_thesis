@@ -365,7 +365,6 @@ class Queue(LinkedList):
             while current.get_next():
                 current = current.get_next()
             node = Node(value)
-            node.set_previous(current)
             current.set_next(node)
         else:
             node = Node(value)
@@ -414,7 +413,8 @@ class PriorityQueue(Queue):
         if self.head:
             value = self.head.get_value()
             self.head = self.head.get_next()
-            self.head.set_previous(None)
+            if self.head:
+                self.head.set_previous(None)
             return value
         return None
 

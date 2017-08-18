@@ -1,8 +1,6 @@
 from octile_grid import OctileGrid
 from octile_grid import OctileCell
-from dynamic_grid import DynamicGrid
-from collections import deque
-from Queue import PriorityQueue
+from lists import Stack, Queue, PriorityQueue
 import math, random
 
 
@@ -78,11 +76,11 @@ def _astar(grid, start, goal):
     :return: The best path as determined by A*.
     """
     open_list = PriorityQueue()
-    open_list.put_nowait(OctileCell(start[0], start[1], start[2]))
+    open_list.enqueue(0, OctileCell(start[0], start[1], start[2]))
     closed_list = set()
 
     while open_list:
-        current = open_list.get_nowait()
+        current = open_list.dequeue()
         if current.get_position() == goal:
             return reconstruct_path(grid, current)
         if current not in closed_list:
@@ -92,7 +90,7 @@ def _astar(grid, start, goal):
                 cell.set_gscore(current.get_gscore() + 1)
                 cell.set_hscore(octile3_heuristic(neighbor, goal))
                 cell.set_fscore(cell.get_gscore() + cell.get_hscore())
-                open_list.put_nowait(cell)
+                open_list.enqueue(cell.get_fscore(), cell)
     return None
 
 def astar(grid):
@@ -109,18 +107,18 @@ def bfs(grid):
     :param grid: The grid world to search.
     :return: The best path as determined by breadth-first search.
     """
-    open_list = deque()
-    open_list.append(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    open_list = Queue()
+    open_list.enqueue(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
     closed_list = set()
 
     while open_list:
-        current = open_list.popleft()
+        current = open_list.dequeue()
         if grid.is_goal_cell(current):
             return reconstruct_path(grid, current)
         if current not in closed_list:
             closed_list.add(current)
             for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
-                open_list.append(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
+                open_list.enqueue(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
     return None
 
 def dfs(grid):
@@ -129,18 +127,18 @@ def dfs(grid):
     :param grid: The grid world to search.
     :return: The best path as determined by breadth-first search.
     """
-    open_list = deque()
-    open_list.appendleft(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    open_list = Stack()
+    open_list.push(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
     closed_list = set()
 
     while open_list:
-        current = open_list.popleft()
+        current = open_list.pop()
         if grid.is_goal_cell(current):
             return reconstruct_path(grid, current)
         if current not in closed_list:
             closed_list.add(current)
             for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
-                open_list.appendleft(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
+                open_list.push(OctileCell(neighbor[0], neighbor[1], neighbor[2], current))
     return None
 
 def dijkstra(grid):
@@ -150,11 +148,11 @@ def dijkstra(grid):
     :return: The best path as determined by Dijkstras search.
     """
     open_list = PriorityQueue()
-    open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    open_list.enqueue(0, OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
     closed_list = set()
 
     while open_list:
-        current = open_list.get_nowait()
+        current = open_list.dequeue()
         if grid.is_goal_cell(current):
             return reconstruct_path(grid, current)
         if current not in closed_list:
@@ -163,16 +161,16 @@ def dijkstra(grid):
                 cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
                 cell.set_gscore(current.get_gscore() + 1)
                 cell.set_fscore(cell.get_gscore() + cell.get_hscore())
-                open_list.put_nowait(cell)
+                open_list.enqueue(0, cell)
     return None
 
 def kruskal(grid):
     open_list = PriorityQueue()
-    open_list.put_nowait(OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
+    open_list.enqueue(0, OctileCell(grid.get_start()[0], grid.get_start()[1], grid.get_start()[2]))
     closed_list = set()
 
     while open_list:
-        current = open_list.get_nowait()
+        current = open_list.dequeue()
         if grid.is_goal_cell(current):
             return reconstruct_path(grid, current)
         if current not in closed_list:
@@ -180,7 +178,7 @@ def kruskal(grid):
             for neighbor in grid.generate_neighbors3(current.get_x(), current.get_y(), current.get_z()):
                 cell = OctileCell(neighbor[0], neighbor[1], neighbor[2], current)
                 cell.set_fscore(octile3_heuristic(cell.get_position(), grid.get_goal()))
-                open_list.put_nowait(cell)
+                open_list.enqueue(cell.get_fscore(), cell)
     return None
 
 class ModernSearchAgents:
