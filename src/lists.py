@@ -97,6 +97,17 @@ class Node:
         """
         self.value = value
 
+    def swap_values(self, node):
+        """
+        Swaps the value of this node with the node specified.
+        :param node: The node to swap values with.
+        :return: Nothing
+        """
+        if node:
+            temp = self.get_value()
+            self.set_value(node.get_value())
+            node.set_value(temp)
+
 
 class PriorityNode(Node):
 
@@ -107,6 +118,7 @@ class PriorityNode(Node):
         :param value: The value that corresponds to this node.
         """
         Node.__init__(self, value)
+        self.previous = None
         self.priority = priority
 
     def __str__(self):
@@ -118,6 +130,21 @@ class PriorityNode(Node):
             return "{0}:{1}, {2}".format(self.get_priority(), self.get_value(), self.get_next().__str__())
         else:
             return "{0}:{1}]".format(self.get_priority(), self.get_value())
+
+    def get_previous(self):
+        """
+        Returns the previous node in the queue.
+        :return: The previous node.
+        """
+        return self.previous
+
+    def set_previous(self, node):
+        """
+        Updates the pointer to the previous node.
+        :param node: Updates the previous node in the queue.
+        :return: Nothing
+        """
+        self.previous = node
 
     def get_priority(self):
         """
@@ -263,12 +290,11 @@ class Queue(LinkedList):
         :return: Nothing
         """
         if self.head:
-            previous = None
             current = self.head
             while current.get_next():
-                previous = current
                 current = current.get_next()
             node = Node(value)
+            node.set_previous(current)
             current.set_next(node)
         else:
             node = Node(value)
@@ -302,29 +328,59 @@ class Queue(LinkedList):
 
 
 class PriorityQueue(Queue):
+
     def __init__(self):
+        """
+        Creates a minimum priority queue.
+        """
         Queue.__init__(self)
 
+    def dequeue(self):
+        """
+        Removes a value from the front of the queue and returns it.
+        :returns Nothing
+        """
+        if self.head:
+            value = self.head.get_value()
+            self.head = self.head.get_next()
+            self.head.set_previous(None)
+            return value
+        return None
+
     def enqueue(self, priority, value):
-        if not self.head:
+        """
+        Adds an item to the priority queue.
+        :param priority: The priority of the item.
+        :param value: The value of the item.
+        :return: Nothing
+        """
+        if self.head:
+            current = self.head
+            while current.get_next():
+                current = current.get_next()
+            node = PriorityNode(priority, value)
+            node.set_previous(current)
+            current.set_next(node)
+            self.sift_up(node)
+        else:
             node = PriorityNode(priority, value)
             self.head = node
-        else:
-            previous = None
-            current = self.head
-            while current.get_next() and current.get_priority() < priority:
-                previous = current
-                current = current.get_next()
-            # Check for end of queue
-            if not current.get_next():
-                node = PriorityNode(priority, value)
-                current.set_next(node)
-            # Otherwise we got out by reaching a larger priority
-            else:
-                node = PriorityNode(priority, value)
-                node.set_next(current.get_next())
-                current.set_next(node)
 
+    def sift_up(self, node):
+        if node.get_previous():
+            next = node.get_previous()
+            while node.get_previous():
+                if next.get_priority() < node.get_priority():
+                    break
+                else:
+                    tp = node.get_priority()
+                    tv = node.get_value()
+                    node.set_priority(next.get_priority())
+                    node.set_value(next.get_value())
+                    next.set_priority(tp)
+                    next.set_value(tv)
+                    node = next
+                    next = node.get_previous()
 
 class Stack(LinkedList):
 
@@ -396,11 +452,11 @@ class Stack(LinkedList):
         pass
 
 def main():
-    import random
+    import random, time
 
     pq = PriorityQueue()
-    for i in range(10):
-        pq.enqueue(random.random()*10, i)
+    for i in range(50):
+        pq.enqueue(round(random.random()*10, 4), i)
     print(pq)
 
 if __name__ == '__main__':
