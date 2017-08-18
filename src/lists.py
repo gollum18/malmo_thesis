@@ -256,6 +256,77 @@ class LinkedList:
         if self.head:
             self.head.set(index, value)
 
+
+class Set(LinkedList):
+
+    def __init__(self):
+        LinkedList.__init__(self)
+
+    def add(self, value):
+        if not self.contains(value):
+            LinkedList.add(self, value)
+
+    def union(self, set):
+        """
+        Returns a new set that is the mathematical union of the current set instance and the indicated set.
+        :param set: The set to union with.
+        :return: The mathematical union of the two sets.
+        """
+        ns = Set()
+        for i in range(self.count()):
+            ns.add(self.get(i))
+        for i in range(set.count()):
+            val = set.get(i)
+            if not ns.contains(val):
+                ns.add(val)
+
+    def intersection(self, set):
+        """
+        Returns a new set that is the mathematical intersection of the current set instance and the indicated set.
+        :param set: The set to intersect with.
+        :return: The mathematical intersection of the two sets.
+        """
+        ns = Set()
+        cself = self.count()
+        cset = set.count()
+        if cself >= cset:
+            for i in range(cset):
+                val = set.get(i)
+                if self.contains(i):
+                    ns.add(val)
+        else:
+            for i in range(cself):
+                val = self.get(i)
+                if set.contains(i):
+                    ns.add(val)
+        return ns
+
+    def difference(self, set):
+        """
+        Returns a new set that is the mathematical difference of the current set instance and the indicated set.
+        That is A-B where A is the caller and B is the passed in set.
+        :param set: The set to difference with.
+        :return: The mathematical difference of the two sets.
+        """
+        ns = Set()
+        for i in range(self.count()):
+            val = self.get(i)
+            if not set.contains(val):
+                ns.add(val)
+        return ns
+
+    def subset(self, set):
+        """
+        Tests whether the indicated set is a subset of this set instance or not.
+        :param set: The set to check as a subset.
+        :return: True if the indeicated set is a subset of this set instance, False if not.
+        """
+        for i in range(set.count()):
+            if not self.contains(set.get(i)):
+                return False
+        return True
+
+
 class Queue(LinkedList):
 
     def __init__(self):
