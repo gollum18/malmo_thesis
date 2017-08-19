@@ -20,20 +20,60 @@
 # Tutorial sample #2: Run simple mission using raw XML
 
 from __future__ import division
-from math import floor, sqrt, tan, atan2
+from math import fabs, floor, sqrt, tan, atan2
+from Queue import PriorityQueue
 import MalmoPython
 import os
 import sys
 import time
 import json
 
-GOAL = ([0, 55, -24], [0, 57, -24], [0, 54, -24])
+AIR = u'air'
+START = (0.5, 56, 24.5)
+GOAL = ([0.5, 55, -24.5], [0.5, 57, -24.5], [0.5, 54, -24.5])
 HAZARDS = [u'lava', u'water']
 POS = {
     0: [-1, -1], 1: [0, -1], 2: [1, -1],
     3: [-1, 0], 4: [0, 0], 5: [1, 0],
     6: [-1, 1], 7: [0, 1], 8: [1, 1]
 }
+
+def is_goal(cell, index):
+    goal = GOAL[index]
+    if cell.x == goal[0] and cell.y == goal[1] and cell.z == goal[2]:
+        return True
+    return False
+
+def dist(p1, p2):
+    dx = fabs(p1[0]-p2[0])
+    dy = fabs(p1[1]-p2[1])
+    dz = fabs(p1[2]-p2[2])
+    return sqrt(dx*dx+dy*dy+dz*dz)
+
+def neighbors(pos, sub, floor, level, roof, super):
+    n = []
+
+    for i in range(len(level)):
+        # Ignore the block we are standing on
+        if i == 4:
+            continue
+        dx, dz = POS[i]
+        # Check for a block at level
+        if level[i] != AIR and level[i] not in HAZARDS:
+            if roof[i] == AIR and super[i] == AIR:
+                # Then this is a block we can jump to
+                n.append((pos[0] + POS[i][0], pos[1] + 1, pos[2] + POS[i][1]))
+        # Check for a block at floor
+        if floor[i] != AIR and floor[i] not in HAZARDS:
+            # This is a block we can walk to
+            if roof[i] == AIR:
+                n.append((pos[0] + POS[i][0], pos[1], pos[2] + POS[i][1]))
+        if floor[i] == AIR:
+            # This is a block we can drop to
+            if sub[i] != AIR and sub[i] not in HAZARDS:
+                n.append((pos[0] + POS[i][0], pos[1] - 1, pos[2] + POS[i][1]))
+
+    return n
 
 sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
 
@@ -81,25 +121,29 @@ missions=[
                     <Placement x="0.5" y="56" z="24.5" yaw="180"/>
                 </AgentStart>
                 <AgentHandlers>
+                  <ObservationFromFullStats/>
                   <ObservationFromGrid>
                     <Grid name="SubFloor">
-                        <min x="-1" y="-2" z="-1"/>
-                        <max x="1" y="-2" z="1"/>
+                      <min x="-1" y="-2" z="-1"/>
+                      <max x="1" y="-2" z="1"/>
                     </Grid>
                     <Grid name="Floor">
-                        <min x="-1" y="-1" z="-1"/>
-                        <max x="1" y="-1" z="1"/>
+                      <min x="-1" y="-1" z="-1"/>
+                      <max x="1" y="-1" z="1"/>
                     </Grid>
                     <Grid name="Level">
-                        <min x="-1" y="0" z="-1"/>
-                        <max x="1" y="0" z="1"/>
+                      <min x="-1" y="0" z="-1"/>
+                      <max x="1" y="0" z="1"/>
                     </Grid>
                     <Grid name="Roof">
-                        <min x="-1" y="1" z="-1"/>
-                        <max x="1" y="1" z="1"/>
+                      <min x="-1" y="1" z="-1"/>
+                      <max x="1" y="1" z="1"/>
+                    </Grid>
+                    <Grid name="SuperRoof">
+                      <min x="-1" y="2" z="-1"/>
+                      <max x="1" y="2" z="1"/>
                     </Grid>
                   </ObservationFromGrid>
-                  <ObservationFromFullStats/>
                   <AbsoluteMovementCommands/>
                   <AgentQuitFromTouchingBlockType>
                     <Block type="diamond_block"/>
@@ -152,7 +196,12 @@ missions=[
                         <Placement x="0.5" y="56" z="24.5" yaw="180"/>
                     </AgentStart>
                     <AgentHandlers>
+                      <ObservationFromFullStats/>
                       <ObservationFromGrid>
+                        <Grid name="SubFloor">
+                            <min x="-1" y="-2" z="-1"/>
+                            <max x="1" y="-2" z="1"/>
+                        </Grid>
                         <Grid name="Floor">
                             <min x="-1" y="-1" z="-1"/>
                             <max x="1" y="-1" z="1"/>
@@ -165,8 +214,11 @@ missions=[
                             <min x="-1" y="1" z="-1"/>
                             <max x="1" y="1" z="1"/>
                         </Grid>
+                        <Grid name="SuperRoof">
+                            <min x="-1" y="2" z="-1"/>
+                            <max x="1" y="2" z="1"/>
+                        </Grid>
                       </ObservationFromGrid>
-                      <ObservationFromFullStats/>
                       <AbsoluteMovementCommands/>
                       <AgentQuitFromTouchingBlockType>
                         <Block type="diamond_block"/>
@@ -219,25 +271,29 @@ missions=[
                     <Placement x="0.5" y="56" z="24.5" yaw="180"/>
                 </AgentStart>
                 <AgentHandlers>
+                  <ObservationFromFullStats/>
                   <ObservationFromGrid>
                     <Grid name="SubFloor">
-                        <min x="-1" y="-2" z="-1"/>
-                        <max x="1" y="-2" z="1"/>
+                      <min x="-1" y="-2" z="-1"/>
+                      <max x="1" y="-2" z="1"/>
                     </Grid>
                     <Grid name="Floor">
-                        <min x="-1" y="-1" z="-1"/>
-                        <max x="1" y="-1" z="1"/>
+                      <min x="-1" y="-1" z="-1"/>
+                      <max x="1" y="-1" z="1"/>
                     </Grid>
                     <Grid name="Level">
-                        <min x="-1" y="0" z="-1"/>
-                        <max x="1" y="0" z="1"/>
+                      <min x="-1" y="0" z="-1"/>
+                      <max x="1" y="0" z="1"/>
                     </Grid>
                     <Grid name="Roof">
-                        <min x="-1" y="1" z="-1"/>
-                        <max x="1" y="1" z="1"/>
+                      <min x="-1" y="1" z="-1"/>
+                      <max x="1" y="1" z="1"/>
+                    </Grid>
+                    <Grid name="SuperRoof">
+                      <min x="-1" y="2" z="-1"/>
+                      <max x="1" y="2" z="1"/>
                     </Grid>
                   </ObservationFromGrid>
-                  <ObservationFromFullStats/>
                   <AbsoluteMovementCommands/>
                   <AgentQuitFromTouchingBlockType>
                     <Block type="diamond_block"/>
@@ -249,56 +305,39 @@ missions=[
 
 # Create default Malmo objects:
 
-def round_even(number):
-    return round(number *2) / 2
+class Cell:
 
-def dist(p1, p2):
-    dx, dy, dz = p2[0]-p1[0], p2[1]-p1[1], p2[2]-p1[2]
-    return sqrt(dx*dx+dy*dy+dz*dz)
+    def __init__(self, x, y, z):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.f = 0
+        self.g = 0
+        self.h = 0
 
-def is_goal(point, index):
-    x, y, z = point
-    xg, yg, zg = GOAL[index]
-    if x >= xg and x <= xg+1:
-        if y >= yg and y <= yg+1:
-            if z >= zg and z <= zg+1:
-                return True
-    return False
+    def __lt__(self, other):
+        return True if self.f < other.f else False
 
-def generate_neighbors(point, subfloor, floor, level, roof, index):
-    neighbors = []
+    def __le__(self, other):
+        return True if self.f <= other.f else False
 
-    for i in range(len(floor)):
-        # Ignore the block were currently at
-        if i == 4:
-            continue
+    def __gt__(self, other):
+        return True if self.f > other.f else False
 
-        if is_goal((point[0]+POS[i][0], point[1], point[2]+POS[i][1]), index):
-            return [((point[0]+POS[i][0], point[1], point[2]+POS[i][1]), "WALK_ON")]
+    def __ge__(self, other):
+        return True if self.f >= other.f else False
 
-        if floor[i] != u'air' and floor[i] not in HAZARDS:
-            # Regular walking case
-            if level[i] == u'air' and roof[i] == u'air':
-                neighbors.append(((point[0]+POS[i][0], point[1], point[2]+POS[i][1]), "WALK_ON"))
-            # Jump to elevation case
-            elif level[i] != u'air' and level[i] not in HAZARDS:
-                if roof[i] == u'air':
-                    neighbors.append(((point[0] + POS[i][0], point[1]+1, point[2] + POS[i][1]), "JUMP_ON"))
-            # Crouching case
-            elif level[i] == u'air' and roof[i] != u'air':
-                neighbors.append(((point[0] + POS[i][0], point[1], point[2] + POS[i][1]), "CROUCH_ON"))
-        else:
-            # Drop down case
-            if subfloor[i] != u'air' and subfloor[i] not in HAZARDS:
-                neighbors.append(((point[0] + POS[i][0], point[1]-1, point[2] + POS[i][1]), "WALK_ON"))
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y and self.z == other.z
 
-    return neighbors
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
-def determine_camera_angles(camera, point):
-    dx, dy = point[1]-camera[1], point[0]-camera[0]
-    azimuth = atan2(dy, dx)
-    polar = tan(sqrt(dx*dx+dy*dy), point(2))
-    return azimuth, polar
+    def __hash__(self):
+        return hash((self.x, self.y, self.z))
+
+    def __str__(self):
+        return "{0}, {1}, {2}, {3}, {4}, {5}".format(self.x, self.y, self.z, self.f, self.g, self.h)
 
 for i in range(len(missions)):
     agent_host = MalmoPython.AgentHost()
@@ -344,6 +383,7 @@ for i in range(len(missions)):
 
     # Loop until mission ends:
     closed = set()
+    gs = 0
     while world_state.is_mission_running:
         sys.stdout.write(".")
         world_state = agent_host.getWorldState()
@@ -352,22 +392,19 @@ for i in range(len(missions)):
         if world_state.number_of_observations_since_last_state > 0:
             msg = world_state.observations[-1].text
             ob = json.loads(msg)
+            pos = (ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos'))
             best = None
-            action = None
-            value = float("inf")
-            cell = ob.get(u'XPos'), ob.get(u'YPos'),  ob.get(u'ZPos')
-            for neighbor in generate_neighbors(cell, ob.get(u'SubFloor'), ob.get(u'Floor'),
-                                               ob.get(u'Level'), ob.get(u'Roof'), i):
-                temp = dist(neighbor[0], GOAL[i])
-                if temp < value:
-                    if neighbor[0] not in closed:
-                        value = temp
-                        best = neighbor[0]
-                        action = neighbor[1]
-            if best:
-                print best
-                closed.add(best)
-                agent_host.sendCommand("tp {0} {1} {2}".format(best[0], best[1], best[2]))
+            val = float("inf")
+            for neighbor in neighbors(pos, ob.get(u'SubFloor'), ob.get(u'Floor'),
+                                        ob.get(u'Level'), ob.get(u'Roof'), ob.get(u'SuperRoof')):
+                if neighbor not in closed:
+                    temp = dist(neighbor, GOAL[i])
+                    if temp + gs < val:
+                        best = neighbor
+                        val = temp + gs
+            gs += 1
+            closed.add(best)
+            agent_host.sendCommand("tp {0} {1} {2}".format(best[0], best[1], best[2]))
             time.sleep(0.3)
     print
     print "Mission ended"
