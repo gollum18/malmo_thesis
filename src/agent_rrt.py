@@ -30,7 +30,7 @@ import json
 
 AIR = u'air'
 START = (0.5, 56, 24.5)
-GOAL = ([0.5, 55, -24.5], [0.5, 57, -24.5], [0.5, 54, -24.5])
+GOAL = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 55, -24.5], [0.5, 61, 0.5])
 HAZARDS = [u'lava', u'water']
 POS = {
     0: [-1, -1], 1: [0, -1], 2: [1, -1],
@@ -85,7 +85,7 @@ missions=[
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
             <About>
-                <Summary>Maze Two</Summary>
+                <Summary>Maze One</Summary>
             </About>
 
               <ServerSection>
@@ -110,13 +110,13 @@ missions=[
                         <DrawCuboid x1="1" y1="55" z1="24" x2="1" y2="57" z2="18" type="obsidian"/>
                         <DrawCuboid x1="0" y1="58" z1="24" x2="0" y2="58" z2="18" type="obsidian"/>
                     </DrawingDecorator>
-                  <ServerQuitFromTimeUp timeLimitMs="30000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="45000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
         
               <AgentSection mode="Survival">
-                <Name>Climbing Agent</Name>
+                <Name>Walking Agent</Name>
                 <AgentStart>
                     <Placement x="0.5" y="56" z="24.5" yaw="180"/>
                 </AgentStart>
@@ -151,12 +151,13 @@ missions=[
                 </AgentHandlers>
               </AgentSection>
             </Mission>''',
+
             # Climb to goal mission
             '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
                 <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
     
                   <About>
-                    <Summary>Maze One</Summary>
+                    <Summary>Maze Two</Summary>
                   </About>
     
                   <ServerSection>
@@ -185,13 +186,13 @@ missions=[
                             <DrawCuboid x1="1" y1="55" z1="24" x2="1" y2="57" z2="18" type="obsidian"/>
                             <DrawCuboid x1="0" y1="58" z1="24" x2="0" y2="58" z2="18" type="obsidian"/>
                         </DrawingDecorator>
-                      <ServerQuitFromTimeUp timeLimitMs="30000"/>
+                      <ServerQuitFromTimeUp timeLimitMs="45000"/>
                       <ServerQuitWhenAnyAgentFinishes/>
                     </ServerHandlers>
                   </ServerSection>
     
                   <AgentSection mode="Survival">
-                    <Name>Walking Agent</Name>
+                    <Name>Climbing Agent</Name>
                     <AgentStart>
                         <Placement x="0.5" y="56" z="24.5" yaw="180"/>
                     </AgentStart>
@@ -226,6 +227,7 @@ missions=[
                     </AgentHandlers>
                   </AgentSection>
                 </Mission>''',
+
             # Drop to goal mission
             '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -260,13 +262,94 @@ missions=[
                         <DrawCuboid x1="1" y1="55" z1="24" x2="1" y2="57" z2="18" type="obsidian"/>
                         <DrawCuboid x1="0" y1="58" z1="24" x2="0" y2="58" z2="18" type="obsidian"/>
                     </DrawingDecorator>
-                  <ServerQuitFromTimeUp timeLimitMs="30000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="45000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
 
               <AgentSection mode="Survival">
                 <Name>Dropping Agent</Name>
+                <AgentStart>
+                    <Placement x="0.5" y="56" z="24.5" yaw="180"/>
+                </AgentStart>
+                <AgentHandlers>
+                  <ObservationFromFullStats/>
+                  <ObservationFromGrid>
+                    <Grid name="SubFloor">
+                      <min x="-1" y="-2" z="-1"/>
+                      <max x="1" y="-2" z="1"/>
+                    </Grid>
+                    <Grid name="Floor">
+                      <min x="-1" y="-1" z="-1"/>
+                      <max x="1" y="-1" z="1"/>
+                    </Grid>
+                    <Grid name="Level">
+                      <min x="-1" y="0" z="-1"/>
+                      <max x="1" y="0" z="1"/>
+                    </Grid>
+                    <Grid name="Roof">
+                      <min x="-1" y="1" z="-1"/>
+                      <max x="1" y="1" z="1"/>
+                    </Grid>
+                    <Grid name="SuperRoof">
+                      <min x="-1" y="2" z="-1"/>
+                      <max x="1" y="2" z="1"/>
+                    </Grid>
+                  </ObservationFromGrid>
+                  <AbsoluteMovementCommands/>
+                  <AgentQuitFromTouchingBlockType>
+                    <Block type="diamond_block"/>
+                  </AgentQuitFromTouchingBlockType>
+                </AgentHandlers>
+              </AgentSection>
+            </Mission>''',
+
+            # Climb the big central pillar
+            '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+            <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+              <About>
+                <Summary>Maze Four</Summary>
+              </About>
+
+              <ServerSection>
+                  <ServerInitialConditions>
+                      <Time>
+                          <StartTime>12000</StartTime>
+                          <AllowPassageOfTime>false</AllowPassageOfTime>
+                      </Time>
+                      <AllowSpawning>false</AllowSpawning>
+                  </ServerInitialConditions>
+                <ServerHandlers>
+                  <FlatWorldGenerator generatorString="3;7,44*49,73,35:1,159:4,95:13,35:13,159:11,95:10,159:14,159:6,35:6,95:6;12;"/>
+                    <DrawingDecorator>
+                        <DrawCuboid x1="-25" y1="55" z1="-25" x2="25" y2="70" z2="-25" type="obsidian"/>
+                        <DrawCuboid x1="-25" y1="55" z1="25" x2="25" y2="70" z2="25" type="obsidian"/>
+                        <DrawCuboid x1="-25" y1="55" z1="-25" x2="-25" y2="70" z2="25" type="obsidian"/>
+                        <DrawCuboid x1="25" y1="55" z1="-25" x2="25" y2="70" z2="25" type="obsidian"/>
+                        <DrawCuboid x1="-5" y1="55" z1="-5" x2="5" y2="60" z2="5" type="obsidian"/>
+                        <DrawBlock x="0" y="60" z="0" type="diamond_block"/>
+                        <DrawBlock x="0" y="55" z="24" type="gold_block"/>
+                        <DrawCuboid x1="-1" y1="55" z1="24" x2="-1" y2="57" z2="18" type="obsidian"/>
+                        <DrawCuboid x1="1" y1="55" z1="24" x2="1" y2="57" z2="18" type="obsidian"/>
+                        <DrawCuboid x1="0" y1="58" z1="24" x2="0" y2="58" z2="18" type="obsidian"/>
+                        
+                        <DrawCuboid x1="-8" y1="58" z1="7" x2="8" y2="58" z2="7" type="obsidian"/>
+                        <DrawCuboid x1="-8" y1="58" z1="6" x2="-8" y2="58" z2="0" type="obsidian"/>
+                        <DrawCuboid x1="8" y1="58" z1="6" x2="8" y2="58" z2="0" type="obsidian"/>
+                        <DrawCuboid x1="-7" y1="59" z1="0" x2="-6" y2="59" z2="0" type="obsidian"/>
+                        <DrawCuboid x1="7" y1="59" z1="0" x2="6" y2="59" z2="0" type="obsidian"/>
+                        
+                        <DrawBlock x="0" y="57" z="8" type="obsidian"/>
+                        <DrawBlock x="0" y="56" z="9" type="obsidian"/>
+                    </DrawingDecorator>
+                  <ServerQuitFromTimeUp timeLimitMs="45000"/>
+                  <ServerQuitWhenAnyAgentFinishes/>
+                </ServerHandlers>
+              </ServerSection>
+
+              <AgentSection mode="Survival">
+                <Name>Hill Climbing Agent</Name>
                 <AgentStart>
                     <Placement x="0.5" y="56" z="24.5" yaw="180"/>
                 </AgentStart>
@@ -373,7 +456,7 @@ for i in range(len(missions)):
     world_state = agent_host.getWorldState()
     while not world_state.has_mission_begun:
         sys.stdout.write(".")
-        time.sleep(0.1)
+        time.sleep(1)
         world_state = agent_host.getWorldState()
         for error in world_state.errors:
             print "Error:",error.text
@@ -396,16 +479,17 @@ for i in range(len(missions)):
             best = None
             val = float("inf")
             for neighbor in neighbors(pos, ob.get(u'SubFloor'), ob.get(u'Floor'),
-                                        ob.get(u'Level'), ob.get(u'Roof'), ob.get(u'SuperRoof')):
+                                      ob.get(u'Level'), ob.get(u'Roof'), ob.get(u'SuperRoof')):
                 if neighbor not in closed:
                     temp = dist(neighbor, GOAL[i])
                     if temp + gs < val:
                         best = neighbor
                         val = temp + gs
             gs += 1
-            closed.add(best)
-            agent_host.sendCommand("tp {0} {1} {2}".format(best[0], best[1], best[2]))
-            time.sleep(0.3)
+            if best:
+                closed.add(best)
+                agent_host.sendCommand("tp {0} {1} {2}".format(best[0], best[1], best[2]))
+                time.sleep(0.3)
     print
     print "Mission ended"
     # Mission has ended.
