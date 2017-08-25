@@ -18,7 +18,7 @@ class RRTAgent:
 
     def __init__(self, start=(0, 0, 0), goal=(15, 0, 15),
                  xdims=(-25, 25), ydims=(-10, 10), zdims=(-25, 25),
-                 alpha=0.1, beta=1.25, epsilon=7.0,
+                 alpha=0.1, beta=1.25, epsilon=3.0, zulu=.1,
                  xrad=2.0, yrad=2.0, zrad=2.0,
                  move_time=0.5, path_time=0.5):
         if alpha < 0 or alpha >= 1: raise ValueError
@@ -33,6 +33,7 @@ class RRTAgent:
         self.alpha = alpha
         self.beta = beta
         self.epsilon = epsilon
+        self.zulu = zulu
         self.radii = xrad, yrad, zrad
         self.move_time = move_time
         self.path_time = path_time
@@ -68,6 +69,7 @@ class RRTAgent:
             path.append(node.pos)
             node = node.parent
 
+        path.reverse()
         return path
 
     def is_goal(self, p):
@@ -103,7 +105,11 @@ class RRTAgent:
 
     def sample(self, p1, p2):
         p = random.random()
-        if p <= 1-self.alpha:
+        # TODO: This also needs a os check added to it
+        # TODO: This time we check for los
+        if 1-self.zulu <= p: #Sample towards the goal
+            return self.line_to(p1, self.goal)
+        elif p <= 1-self.alpha:
             return self.line_to(p1, p2)
         # TODO: This needs a los check added to it
         elif p <= (1-self.alpha)/self.beta:
@@ -128,7 +134,7 @@ def test3d():
     nodes = [Node(agent.position)]
     found = False
 
-    for i in range(5000):
+    for i in range(50000):
         rand = agent.uniform()
         nn = nodes[0]
         for p in nodes:
@@ -139,8 +145,8 @@ def test3d():
             found = True
             path = agent.get_path(nodes[-1])
             print "Path is: "
-            for i in range(len(path)):
-                print "{0}.) {1}".format(i+1, path[i])
+            for j in range(len(path)):
+                print "{0}.) {1}".format(j+1, path[j])
             break
 
     if not found:
