@@ -521,16 +521,3 @@ class Stack(LinkedList):
         :return: Nothing
         """
         pass
-
-def main():
-    import random, time
-
-    pq = PriorityQueue()
-    for i in range(50):
-        pq.enqueue(round(random.random()*10, 4), i)
-    print(pq)
-    while not pq.is_empty():
-        print(pq.dequeue())
-
-if __name__ == '__main__':
-    main()

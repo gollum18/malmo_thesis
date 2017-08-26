@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<About>
+		<Summary>Maze One</Summary>
+	</About>
+	<ServerSection>
+		<ServerInitialConditions>
+			<Time>
+				<StartTime>12000</StartTime>
+				<AllowPassageOfTime>false</AllowPassageOfTime>
+			</Time>
+			<AllowSpawning>false</AllowSpawning>
+		</ServerInitialConditions>
+		<ServerHandlers>
+			<FlatWorldGenerator generatorString="3;7,44*49,73,35:1,159:4,95:13,35:13,159:11,95:10,159:14,159:6,35:6,95:6;12;"/>
+			<DrawingDecorator>
+				<!-- Draw the surrounding cube so the ai cannot escape the test area -->
+				<DrawCuboid x1="-25" y1="55" z1="-25" x2="25" y2="70" z2="-25" type="obsidian"/>
+				<DrawCuboid x1="-25" y1="55" z1="25" x2="25" y2="70" z2="25" type="obsidian"/>
+				<DrawCuboid x1="-25" y1="55" z1="-25" x2="-25" y2="70" z2="25" type="obsidian"/>
+				<DrawCuboid x1="25" y1="55" z1="-25" x2="25" y2="70" z2="25" type="obsidian"/>
+				<!-- Draw the goal and start blocks -->
+				<DrawBlock x="0" y="55" z="-24" type="diamond_block"/>
+				<DrawBlock x="0" y="55" z="24" type="gold_block"/>
+				<!-- Draw an obstacle in the center of the map -->
+				<DrawCuboid x1="-5" y1="55" z1="-5" x2="5" y2="60" z2="5" type="obsidian"/>
+				<!-- Draw the starting container -->
+				<DrawCuboid x1="-1" y1="55" z1="24" x2="-1" y2="57" z2="18" type="obsidian"/>
+				<DrawCuboid x1="1" y1="55" z1="24" x2="1" y2="57" z2="18" type="obsidian"/>
+				<DrawCuboid x1="0" y1="58" z1="24" x2="0" y2="58" z2="18" type="obsidian"/>
+			</DrawingDecorator>
+			<ServerQuitFromTimeUp timeLimitMs="45000"/>
+			<ServerQuitWhenAnyAgentFinishes/>
+		</ServerHandlers>
+	</ServerSection>
+
+	<AgentSection mode="Survival">
+		<Name>Walking Agent</Name>
+		<AgentStart>
+			<Placement x="0.5" y="56" z="24.5" yaw="180"/>
+		</AgentStart>
+		<AgentHandlers>
+			<ObservationFromFullStats/>
+			<ObservationFromGrid>
+				<Grid name="SubFloor">
+					<min x="-1" y="-2" z="-1"/>
+					<max x="1" y="-2" z="1"/>
+				</Grid>
+				<Grid name="Floor">
+					<min x="-1" y="-1" z="-1"/>
+					<max x="1" y="-1" z="1"/>
+				</Grid>
+				<Grid name="Level">
+					<min x="-1" y="0" z="-1"/>
+					<max x="1" y="0" z="1"/>
+				</Grid>
+				<Grid name="Roof">
+					<min x="-1" y="1" z="-1"/>
+					<max x="1" y="1" z="1"/>
+				</Grid>
+				<Grid name="SuperRoof">
+					<min x="-1" y="2" z="-1"/>
+					<max x="1" y="2" z="1"/>
+				</Grid>
+			</ObservationFromGrid>
+			<AbsoluteMovementCommands/>
+			<AgentQuitFromTouchingBlockType>
+				<Block type="diamond_block"/>
+			</AgentQuitFromTouchingBlockType>
+		</AgentHandlers>
+	</AgentSection>
+</Mission>

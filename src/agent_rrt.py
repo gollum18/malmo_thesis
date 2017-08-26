@@ -1,5 +1,43 @@
 from __future__ import division
-import math, time, random
+import MalmoPython, os, sys, json, math, time, random
+
+
+AIR = u'air'
+START = (0.5, 56, 24.5)
+GOALS = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 55, -24.5], [0.5, 61, 0.5], [0.5, 56, -28.5])
+HAZARDS = [u'lava', u'water']
+
+# Represents the change in x and z respectively from going to another cell discretely
+# Cell 12 is always the players position
+PDIFF = {
+    0 :[-2,-2], 1 :[-1,-2], 2 :[0,-2], 3 :[1,-2], 4 :[2,-2],
+    5 :[-2,-1], 6 :[-1,-1], 7 :[0,-1], 8 :[1,-1], 9 :[2,-1],
+    10 :[-2,0], 11 :[-1,0], 12 :[0,0], 13 :[1,0], 14 :[2,0],
+    15 :[-2,1], 16 :[-1,1], 17 :[0,1], 18 :[1,1], 19 :[2,1],
+    20 :[-2,2], 21 :[-1,2], 22 :[0,2], 23 :[1,2], 24 :[2,2]
+}
+
+# Represents the world dimensions of the various maps
+MDIMS = (
+    ((-25, 25), (55, 70), (-25, 25)),
+    ((-25, 25), (55, 70), (-25, 25)),
+    ((-25, 25), (55, 70), (-25, 25)),
+    ((-25, 25), (55, 70), (-25, 25)),
+    ((-3, 3), (55, 75), (-30, 25))
+)
+
+missions = [
+    # Walk to goal mission
+    './pp_mission_one.xml',
+    # Climb to goal mission
+    './pp_mission_two.xml',
+    # Drop to goal mission
+    './pp_mission_three.xml',
+    # Climb the big central pillar
+    './pp_mission_four.xml',
+    # Time for an obstacle course, combining everything into one
+    './pp_mission_five.xml'
+]
 
 
 class Timer:
@@ -27,6 +65,9 @@ class RRTAgent:
         if xrad <= 0: raise ValueError
         if yrad <= 0: raise ValueError
         if zrad <= 0: raise ValueError
+        self.world = {}
+        self.stage = 0
+        self.start = start
         self.position = start
         self.goal = goal
         self.dimensions = (xdims, ydims, zdims)
@@ -39,6 +80,24 @@ class RRTAgent:
         self.path_time = path_time
         self.pathing_timer = Timer()
         self.move_timer = Timer()
+
+        # Construct an empty world state
+        for z in range(self.get_zmin(), self.get_zmax()):
+            for y in range(self.get_ymin(), self.get_ymax()):
+                for x in range(self.get_xmin(), self.get_xmax()):
+                    self.world[(x, y, z)] = AIR
+
+        # Set the start and goal blocks
+        self.world[(self.start[0], self.start[1], self.start[2])] = u'gold_block'
+        self.world[(self.goal[0], self.goal[1], self.goal[2])] = u'diamond_block'
+
+    def get_world_state_at_position(self, p):
+        if self.in_bounds(p):
+            return self.world[p]
+
+    def set_world_state_at_position(self, p, s):
+        if self.in_bounds(p) and self.get_world_state_at_position(p) != s:
+            self.world[p] = s
 
     def get_xmin(self):
         return min(self.dimensions[0])
@@ -61,6 +120,78 @@ class RRTAgent:
     @staticmethod
     def dist(p1, p2):
         return math.sqrt((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1])+(p1[2]-p2[2])*(p1[2]-p2[2]))
+
+    def is_valid_cell(self, p):
+        if not self.in_bounds(p):
+            return False
+        s = self.get_world_state_at_position(p)
+        su = self.get_world_state_at_position((p[0], p[1]+1, p[2]))
+        if s != AIR and s not in HAZARDS:
+            if su != AIR and su not in HAZARDS:
+                return True
+
+    def los2d(self, p):
+        """
+        Checks for line of sight between blocks on the players level.
+        Line of sight is always calculated from the players current position.
+        :param p: The point to check line of sight for.
+        :return: True if there is line of sight (i.e. the path is not blocked), False otherwise.
+        """
+        xc, xg = self.position[0], p[0]
+        zc, zg = self.position[2], p[2]
+        dx, dz = xg - xc, zg - zc
+        sx, sz = 0, 0
+        f = 0
+
+        if dz < 0:
+            dz = -dz
+            sz = -1
+        else:
+            sz = 1
+
+        if dx < 0:
+            dx = -dx
+            sx = -1
+        else:
+            sx = 1
+
+        if dx >= dz:
+            while xc != xg:
+                f = f + dz
+                # Case One
+                if f >= dx:
+                    if not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                        return False
+                    zc = zc + sz
+                    f = f - dx
+                # Case Two
+                if f != 0 and not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                    return False
+                # Case Three
+                if (dz == 0 and
+                    not self.is_valid_cell((xc+((sx-1)/2), p[1], zc)) and
+                    not self.is_valid_cell((xc+((sx-1)/2), p[1], zc-1))):
+                        return False
+                xc = xc + sx
+        else:
+            while zc != zg:
+                f = f + dx
+                # Case One
+                if f >= dz:
+                    if not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                        return False
+                    xc = xc + sx
+                    f = f - dz
+                # Case Two
+                if f != 0 and not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                    return False
+                # Case Three
+                if (dz == 0 and
+                    not self.is_valid_cell((xc, p[1], zc + (sz-1)/2)) and
+                    not self.is_valid_cell((xc-1, p[1], zc + (sz-1)/2))):
+                    return False
+                zc = zc + sz
+        return True
 
     def get_path(self, node):
         path = []
@@ -95,6 +226,28 @@ class RRTAgent:
                 random.uniform(-self.radii[1], self.radii[1]),
                 random.uniform(-self.radii[2], self.radii[2]))
 
+    def neighbors(self, sub, floor, level, roof, super):
+        n = []
+
+        for i in range(len(level)):
+            # This section builds the representation of the world as we discover it
+            if sub[i] != AIR:
+                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]-2, self.position[2]+PDIFF[i][1]), sub[i])
+            if floor[i] != AIR:
+                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]-1, self.position[2]+PDIFF[i][1]), sub[i])
+            if level[i] != AIR:
+                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1], self.position[2]+PDIFF[i][1]), sub[i])
+            if roof[i] != AIR:
+                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]+1, self.position[2]+PDIFF[i][1]), sub[i])
+            if super[i] != AIR:
+                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]+2, self.position[2]+PDIFF[i][1]), sub[i])
+
+            # TODO: Generate valid neighbors for a 5x5 matrix of locations
+            # This section generates valid neighbors from the current position
+
+
+        return n
+
     def line_to(self, p1, p2):
         if self.dist(p1, p2) < self.epsilon:
             return p2
@@ -105,7 +258,7 @@ class RRTAgent:
 
     def sample(self, p1, p2):
         p = random.random()
-        # TODO: This also needs a os check added to it
+        # TODO: This also needs a los check added to it
         # TODO: This time we check for los
         if 1-self.zulu <= p: #Sample towards the goal
             return self.line_to(p1, self.goal)
@@ -122,11 +275,102 @@ class RRTAgent:
                 random.uniform(self.get_ymin(), self.get_ymax()),
                 random.uniform(self.get_zmin(), self.get_zmax()))
 
+
 class Node:
 
     def __init__(self, pos, parent=None):
         self.pos = pos
         self.parent = parent
+
+
+def dist(p1, p2):
+    dx = math.fabs(p1[0]-p2[0])
+    dy = math.fabs(p1[1]-p2[1])
+    dz = math.fabs(p1[2]-p2[2])
+    return math.sqrt(dx*dx+dy*dy+dz*dz)
+
+# More interesting generator string: "3;7,44*49,73,35:1,159:4,95:13,35:13,159:11,95:10,159:14,159:6,35:6,95:6;12;"
+
+def get_world_xdims(i):
+    return MDIMS[i][0]
+
+def get_world_ydims(i):
+    return MDIMS[i][1]
+
+def get_world_zdims(i):
+    return MDIMS[i][2]
+
+def main():
+    sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
+    for i in range(len(missions)):
+        # Get the agent host
+        host = MalmoPython.AgentHost()
+
+        # Parse any command line arguments
+        try:
+            host.parse(sys.argv)
+        except RuntimeError as e:
+            print 'ERROR:', e
+            print host.getUsage()
+        if host.receivedArgument("help"):
+            print host.getUsage()
+            exit(0)
+
+        mission = None
+        # Load in the mission
+        with open(missions[i], 'r') as f:
+            print "Loading mission from {0}".format(missions[i])
+            mission = MalmoPython.MissionSpec(f.read(), True)
+
+        # Attempt to start a mission
+        retries = 3
+        for retry in range(retries):
+            try:
+                host.startMission(mission, None)
+            except RuntimeError as e:
+                if retry == retries - 1:
+                    print "Error starting missions:", e
+                    exit(1)
+                else:
+                    time.sleep(1)
+
+        # Loop until mission starts
+        print "Waiting for the mission to start",
+        world = host.getWorldState()
+        while not world.has_mission_begun:
+            sys.stdout.write(".")
+            time.sleep(1)
+            world = host.getWorldState()
+            for error in world.errors:
+                print "Error:", error.text
+
+        print
+        print "Mission running",
+
+        # Create an rrt holding the agent
+        rrt = RRTAgent(start=START, goal=GOALS[i], xdims=get_world_xdims(i), ydims=get_world_ydims(i),
+                       zdims=get_world_zdims(i), epsilon=1.0, xrad=1.0, yrad=1.0, zrad=1.0)
+
+        # Loop until missions ends
+        while world.is_mission_running:
+            sys.stdout.write(".")
+            world = host.getWorldState()
+            for error in world.errors:
+                print "Error:", error.text
+            # TODO: Complete the first stage, discovery
+            # We basically want to do a breadth first search here without ending the mission
+            # The objective is to just discover the world since we do not have it coded in
+            if rrt.stage == 0 and world.number_of_observations_since_last_state > 0:
+                msg = world.observations[-1].text
+                ob = json.loads(msg)
+                rrt.position = (ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos'))
+            # TODO: Complete the second stage, pathing
+            # At this point, we will want to start spawning in some monsters to avoid as well
+            # For simplicity these should just be something like endermites
+            elif world.number_of_observations_since_last_state > 0:
+                msg = world.observations[-1].text
+                ob = json.loads(msg)
+                rrt.position = (ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos'))
 
 def test3d():
 
