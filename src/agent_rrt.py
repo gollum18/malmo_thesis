@@ -1,4 +1,6 @@
 from __future__ import division
+from decimal import Decimal, ROUND_HALF_UP
+from collections import deque
 import MalmoPython
 import os
 import sys
@@ -8,6 +10,7 @@ import time
 import random
 
 AIR = u'air'
+DIAMOND = u'diamond'
 START = (0.5, 56, 24.5)
 GOALS = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 55, -24.5], [0.5, 61, 0.5], [0.5, 56, -28.5])
 HAZARDS = [u'lava', u'water']
@@ -131,6 +134,9 @@ class RRTAgent:
     def get_zmax(self):
         return max(self.dimensions[2])
 
+    def get_start(self):
+        return self.start
+
     @staticmethod
     def dist(p1, p2):
         return math.sqrt((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1])+(p1[2]-p2[2])*(p1[2]-p2[2]))
@@ -209,6 +215,28 @@ class RRTAgent:
                 zc = zc + sz
         return True
 
+    def los3d(self, p1, p2):
+        """
+        Determines line of sight between two points in 3D.
+        :param p1: The point to check line of sight from.
+        :param p2: The point to check line of sight to.
+        :return: True if there is unobscured line of sight between the two points, False otherwise.
+        """
+        dx, dy, dz = p2[0]-p1[0], p2[1]-p1[1], p2[2]-p1[2]
+        s = max(dx, dy, dz)
+        dx = Decimal(dx/s)
+        dy = Decimal(dy/s)
+        dz = Decimal(dz/s)
+        cx, cy, cz = Decimal(p1[0]), Decimal(p1[1]), Decimal(p1[2])
+        gx, gy, gz = p2
+        while int(cx) != gx and int(cy) != gy and int(cz) != gz:
+            cx += dx
+            cy += dy
+            cz += dz
+            if not self.is_valid_cell((bankers_round(cx), bankers_round(cy), bankers_round(cz))):
+                return False
+        return True
+
     def get_path(self, node):
         path = []
 
@@ -262,23 +290,31 @@ class RRTAgent:
         # This section generates valid neighbors from the current position
         # Check the far blocks first
         for i in FAR:
+
+            above = self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1]))
+            level = self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1]))
+            below = self.get_world_state_at_position((x+PDIFF[i][0], y-1, z+PDIFF[i][1]))
+
             if (self.los2d(self.position, (x+PDIFF[i][0], y, z+PDIFF[i][1])) and
-                    self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1])) == AIR):
+                    above != AIR and below not in HAZARDS and level == AIR and above == AIR and below != DIAMOND):
                 n.append((x+PDIFF[i][0], y, z+PDIFF[i][1]))
         for i in NEAR:
+            above =  self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1]))
+            level =  self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1]))
+            below =  self.get_world_state_at_position((x+PDIFF[i][0], y-1, z+PDIFF[i][1]))
+            above2 =  self.get_world_state_at_position((x+PDIFF[i][0], y+2, z+PDIFF[i][1]))
+            below2 =  self.get_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1]))
             # Walking case
-            if self.is_valid_cell((x+PDIFF[i][0], y, z+PDIFF[i][1])):
+            if (self.is_valid_cell((x+PDIFF[i][0], y, z+PDIFF[i][1])) and
+                    below != DIAMOND):
                 n.append((x+PDIFF[i][0], y, z+PDIFF[i][1]))
             # Jumping case
-            elif (self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1])) != AIR and
-                    self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1])) not in HAZARDS):
-                if (self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1])) == AIR and
-                        self.get_world_state_at_position((x+PDIFF[i][0], y+2, z+PDIFF[i][1])) == AIR):
+            elif level != AIR and level != DIAMOND and level not in HAZARDS:
+                if above == AIR and above2 == AIR:
                     n.append((x+PDIFF[i][0], y+1, z+PDIFF[i][1]))
             # Dropping case
-            elif self.get_world_state_at_position((x+PDIFF[i][0], y-1, z+PDIFF[i][1])) == AIR:
-                if (self.get_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1])) == AIR and
-                        self.get_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1])) not in HAZARDS):
+            elif below == AIR:
+                if below2 == AIR and below2 != DIAMOND and below2 not in HAZARDS:
                     n.append((x+PDIFF[i][0], y-1, z+PDIFF[i][1]))
 
         return n
@@ -295,13 +331,25 @@ class RRTAgent:
         p = random.random()
         # Sample towards the goal
         if 1-self.zulu <= p:
-            return self.line_to(p1, self.goal)
+            point = self.line_to(p1, self.goal)
+            while not (self.is_valid_cell(p) and self.los2d(p1, p2) if p2[1]-p1[1] == 0 else self.los3d(p1, p2)):
+                point = self.line_to(p1, self.goal)
+            return point
         elif p <= 1-self.alpha:
-            return self.line_to(p1, p2)
-        elif p <= (1-self.alpha)/self.beta or not self.los2d(p1, p2):
-            return self.uniform()
+            point = self.line_to(p1, p2)
+            while not (self.is_valid_cell(p) and self.los2d(p1, p2) if p2[1] - p1[1] == 0 else self.los3d(p1, p2)):
+                point = self.line_to(p1, p2)
+            return point
+        elif p <= (1-self.alpha)/self.beta or not self.los2d(p1, p2) if p2[1]-p1[1] == 0 else self.los3d(p1, p2):
+            point = self.uniform()
+            while not (self.is_valid_cell(point) and self.los2d(p1, p2) if p2[1]-p1[1] == 0 else self.los3d(p1, p2)):
+                point = self.uniform()
+            return point
         else:
-            return self.ellipsoid()
+            point = self.ellipsoid()
+            while not (self.is_valid_cell(p) and self.los2d(p1, p2) if p2[1] - p1[1] == 0 else self.los3d(p1, p2)):
+                point = self.ellipsoid()
+            return point
 
     def uniform(self):
         return (random.uniform(self.get_xmin(), self.get_xmax()),
@@ -314,6 +362,15 @@ class Node:
     def __init__(self, pos, parent=None):
         self.pos = pos
         self.parent = parent
+
+
+def bankers_round(d):
+    """
+    Will return a decimal alue that is properly rounded up or down depending on bankers rounding.
+    :param d: A decimal to round.
+    :return: A rounded decimal.
+    """
+    return Decimal(d).quantize(0, ROUND_HALF_UP)
 
 
 def dist(p1, p2):
@@ -389,6 +446,9 @@ def main():
                        zdims=get_world_zdims(i), epsilon=1.0, xrad=1.0, yrad=1.0, zrad=1.0)
 
         # Loop until missions ends
+        openlist = deque()
+        closedlist = set()
+        nodes = []
         while world.is_mission_running:
             sys.stdout.write(".")
             world = host.getWorldState()
@@ -401,6 +461,20 @@ def main():
                 msg = world.observations[-1].text
                 ob = json.loads(msg)
                 rrt.position = (ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos'))
+                if rrt.position not in closedlist:
+                    closedlist.add(rrt.position)
+                    for neighbor in rrt.neighbors(ob.get(u'SubFloor'), ob.get(u'Floor'), ob.get(u'Level'),
+                                                    ob.get(u'Roof'), ob.get(u'SuperRoof')):
+                        openlist.append(neighbor)
+                if not openlist:
+                    # Reset the agents position to the start
+                    host.sendCommand("".format(rrt.get_start()[0], rrt.get_start()[1], rrt.get_start()[2]))
+                    rrt.stage = 1
+                    nodes.append(Node(rrt.position, None))
+                    continue
+                popped = openlist.popleft()
+                host.sendCommand("tp {0} {1} {2}".format(popped[0], popped[1], popped[2]))
+                time.sleep(.3)
             # TODO: Complete the second stage, pathing
             # At this point, we will want to start spawning in some monsters to avoid as well
             # For simplicity these should just be something like endermites
@@ -408,7 +482,7 @@ def main():
                 msg = world.observations[-1].text
                 ob = json.loads(msg)
                 rrt.position = (ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos'))
-
+                
 def test3d():
 
     agent = RRTAgent()
