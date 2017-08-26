@@ -45,15 +45,15 @@ MDIMS = (
 
 missions = [
     # Walk to goal mission
-    './missions/pp_mission_one.xml',
+    './missions/pp_maze_one.xml',
     # Climb to goal mission
-    './missions/pp_mission_two.xml',
+    './missions/pp_maze_two.xml',
     # Drop to goal mission
-    './missions/pp_mission_three.xml',
+    './missions/pp_maze_three.xml',
     # Climb the big central pillar
-    './missions/pp_mission_four.xml',
+    './missions/pp_maze_four.xml',
     # Time for an obstacle course, combining everything into one
-    './missions/pp_mission_five.xml'
+    './missions/pp_maze_five.xml'
 ]
 
 
@@ -237,7 +237,23 @@ class RRTAgent:
                 return False
         return True
 
-    def get_path(self, node):
+    def rrt(self):
+        nodes = [Node(self.position)]
+
+        for i in range(50000):
+            rand = self.uniform()
+            nn = nodes[0]
+            for p in nodes:
+                if RRTAgent.dist(p.pos, rand) < RRTAgent.dist(nn.pos, rand):
+                    nn = p
+            nodes.append(Node(self.sample(nn.pos, rand), nn))
+            if self.is_goal(nodes[-1].pos):
+                print "We found a path :)"
+                return self.reconstruct_path(nodes[-1])
+
+        print "There was no path found :("
+
+    def reconstruct_path(self, node):
         path = []
 
         while node.parent:
@@ -272,7 +288,7 @@ class RRTAgent:
 
     def neighbors(self, sub, floor, level, roof, super):
         n = []
-        x, y, z = self.position
+        x, y, z = math.floor(self.position[0]), math.floor(self.position[1]), math.floor(self.position[2])
 
         for i in range(len(level)):
             # This section builds the representation of the world as we discover it
@@ -299,11 +315,11 @@ class RRTAgent:
                     above != AIR and below not in HAZARDS and level == AIR and above == AIR and below != DIAMOND):
                 n.append((x+PDIFF[i][0], y, z+PDIFF[i][1]))
         for i in NEAR:
-            above =  self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1]))
-            level =  self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1]))
-            below =  self.get_world_state_at_position((x+PDIFF[i][0], y-1, z+PDIFF[i][1]))
-            above2 =  self.get_world_state_at_position((x+PDIFF[i][0], y+2, z+PDIFF[i][1]))
-            below2 =  self.get_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1]))
+            above = self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1]))
+            level = self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1]))
+            below = self.get_world_state_at_position((x+PDIFF[i][0], y-1, z+PDIFF[i][1]))
+            above2 = self.get_world_state_at_position((x+PDIFF[i][0], y+2, z+PDIFF[i][1]))
+            below2 = self.get_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1]))
             # Walking case
             if (self.is_valid_cell((x+PDIFF[i][0], y, z+PDIFF[i][1])) and
                     below != DIAMOND):
@@ -394,7 +410,7 @@ def get_world_zdims(i):
     return MDIMS[i][2]
 
 
-def main():
+def testrrt():
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
     for i in range(len(missions)):
         # Get the agent host
@@ -415,25 +431,26 @@ def main():
         with open(missions[i], 'r') as f:
             print "Loading mission from {0}".format(missions[i])
             mission = MalmoPython.MissionSpec(f.read(), True)
+        record = MalmoPython.MissionRecordSpec()
 
         # Attempt to start a mission
         retries = 3
         for retry in range(retries):
             try:
-                host.startMission(mission, None)
+                host.startMission(mission, record)
             except RuntimeError as e:
                 if retry == retries - 1:
                     print "Error starting missions:", e
                     exit(1)
                 else:
-                    time.sleep(1)
+                    time.sleep(2)
 
         # Loop until mission starts
         print "Waiting for the mission to start",
         world = host.getWorldState()
         while not world.has_mission_begun:
             sys.stdout.write(".")
-            time.sleep(1)
+            time.sleep(0.1)
             world = host.getWorldState()
             for error in world.errors:
                 print "Error:", error.text
@@ -448,9 +465,10 @@ def main():
         # Loop until missions ends
         openlist = deque()
         closedlist = set()
-        nodes = []
+        path = None
         while world.is_mission_running:
             sys.stdout.write(".")
+            time.sleep(.1)
             world = host.getWorldState()
             for error in world.errors:
                 print "Error:", error.text
@@ -468,21 +486,28 @@ def main():
                         openlist.append(neighbor)
                 if not openlist:
                     # Reset the agents position to the start
-                    host.sendCommand("".format(rrt.get_start()[0], rrt.get_start()[1], rrt.get_start()[2]))
+                    host.sendCommand("tp {0} {1} {2}".format(rrt.get_start()[0], rrt.get_start()[1], rrt.get_start()[2]))
+                    time.sleep(.3)
                     rrt.stage = 1
-                    nodes.append(Node(rrt.position, None))
                     continue
                 popped = openlist.popleft()
                 host.sendCommand("tp {0} {1} {2}".format(popped[0], popped[1], popped[2]))
                 time.sleep(.3)
             # TODO: Complete the second stage, pathing
-            # At this point, we will want to start spawning in some monsters to avoid as well
-            # For simplicity these should just be something like endermites
-            elif world.number_of_observations_since_last_state > 0:
-                msg = world.observations[-1].text
-                ob = json.loads(msg)
-                rrt.position = (ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos'))
-                
+            # At this stage, we simulate rrt on the emulated environment
+            # We get a path back from the agent and pass it to the MalmoAgent in stage 3
+            elif rrt.stage == 1:
+                path = rrt.rrt()
+                if path:
+                    stage = 2
+                    continue
+                else:
+                    break
+            elif rrt.stage == 2:
+                pos = path.pop()
+                host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
+                time.sleep(.3)
+
 def test3d():
 
     agent = RRTAgent()
@@ -498,7 +523,7 @@ def test3d():
         nodes.append(Node(agent.sample(nn.pos, rand), nn))
         if agent.is_goal(nodes[-1].pos):
             found = True
-            path = agent.get_path(nodes[-1])
+            path = agent.reconstruct_path(nodes[-1])
             print "Path is: "
             for j in range(len(path)):
                 print "{0}.) {1}".format(j+1, path[j])
@@ -508,4 +533,4 @@ def test3d():
         print "There was no path found :("
 
 if __name__ == '__main__':
-    test3d()
+    testrrt()
