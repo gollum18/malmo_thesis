@@ -1,20 +1,34 @@
 from __future__ import division
-import MalmoPython, os, sys, json, math, time, random
-
+import MalmoPython
+import os
+import sys
+import json
+import math
+import time
+import random
 
 AIR = u'air'
 START = (0.5, 56, 24.5)
 GOALS = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 55, -24.5], [0.5, 61, 0.5], [0.5, 56, -28.5])
 HAZARDS = [u'lava', u'water']
 
+# Represents the range of blocks that are 2 steps from agent
+FAR = [0, 1, 2, 3, 4, 5, 9, 10, 14, 15, 19, 20, 21, 22, 23, 24]
+
+# Represents the range of blocks that are 1 step from the agent
+NEAR = [6, 7, 8, 11, 13, 16, 17, 18]
+
+# Represents the agents tile
+AGENT = 12
+
 # Represents the change in x and z respectively from going to another cell discretely
 # Cell 12 is always the players position
 PDIFF = {
-    0 :[-2,-2], 1 :[-1,-2], 2 :[0,-2], 3 :[1,-2], 4 :[2,-2],
-    5 :[-2,-1], 6 :[-1,-1], 7 :[0,-1], 8 :[1,-1], 9 :[2,-1],
-    10 :[-2,0], 11 :[-1,0], 12 :[0,0], 13 :[1,0], 14 :[2,0],
-    15 :[-2,1], 16 :[-1,1], 17 :[0,1], 18 :[1,1], 19 :[2,1],
-    20 :[-2,2], 21 :[-1,2], 22 :[0,2], 23 :[1,2], 24 :[2,2]
+    0: [-2, -2], 1: [-1, -2], 2: [0, -2], 3: [1, -2], 4: [2, -2],
+    5: [-2, -1], 6: [-1, -1], 7: [0, -1], 8: [1, -1], 9: [2, -1],
+    10: [-2, 0], 11: [-1, 0], 12: [0, 0], 13: [1, 0], 14: [2, 0],
+    15: [-2, 1], 16: [-1, 1], 17: [0, 1], 18: [1, 1], 19: [2, 1],
+    20: [-2, 2], 21: [-1, 2], 22: [0, 2], 23: [1, 2], 24: [2, 2]
 }
 
 # Represents the world dimensions of the various maps
@@ -28,15 +42,15 @@ MDIMS = (
 
 missions = [
     # Walk to goal mission
-    './pp_mission_one.xml',
+    './missions/pp_mission_one.xml',
     # Climb to goal mission
-    './pp_mission_two.xml',
+    './missions/pp_mission_two.xml',
     # Drop to goal mission
-    './pp_mission_three.xml',
+    './missions/pp_mission_three.xml',
     # Climb the big central pillar
-    './pp_mission_four.xml',
+    './missions/pp_mission_four.xml',
     # Time for an obstacle course, combining everything into one
-    './pp_mission_five.xml'
+    './missions/pp_mission_five.xml'
 ]
 
 
@@ -125,20 +139,22 @@ class RRTAgent:
         if not self.in_bounds(p):
             return False
         s = self.get_world_state_at_position(p)
+        sb = self.get_world_state_at_position((p[0], p[1]-1, p[2]))
         su = self.get_world_state_at_position((p[0], p[1]+1, p[2]))
-        if s != AIR and s not in HAZARDS:
-            if su != AIR and su not in HAZARDS:
-                return True
+        if sb != AIR and s not in HAZARDS:
+            if s == AIR:
+                if su == AIR:
+                    return True
 
-    def los2d(self, p):
+    def los2d(self, p1, p2):
         """
         Checks for line of sight between blocks on the players level.
         Line of sight is always calculated from the players current position.
         :param p: The point to check line of sight for.
         :return: True if there is line of sight (i.e. the path is not blocked), False otherwise.
         """
-        xc, xg = self.position[0], p[0]
-        zc, zg = self.position[2], p[2]
+        xc, xg = p1[0], p2[0]
+        zc, zg = p1[2], p2[2]
         dx, dz = xg - xc, zg - zc
         sx, sz = 0, 0
         f = 0
@@ -160,17 +176,17 @@ class RRTAgent:
                 f = f + dz
                 # Case One
                 if f >= dx:
-                    if not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                    if not self.is_valid_cell((xc+((sx-1)/2), p1[1], zc + (sz-1)/2)):
                         return False
                     zc = zc + sz
                     f = f - dx
                 # Case Two
-                if f != 0 and not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                if f != 0 and not self.is_valid_cell((xc+((sx-1)/2), p1[1], zc + (sz-1)/2)):
                     return False
                 # Case Three
                 if (dz == 0 and
-                    not self.is_valid_cell((xc+((sx-1)/2), p[1], zc)) and
-                    not self.is_valid_cell((xc+((sx-1)/2), p[1], zc-1))):
+                    not self.is_valid_cell((xc+((sx-1)/2), p1[1], zc)) and
+                        not self.is_valid_cell((xc+((sx-1)/2), p1[1], zc-1))):
                         return False
                 xc = xc + sx
         else:
@@ -178,17 +194,17 @@ class RRTAgent:
                 f = f + dx
                 # Case One
                 if f >= dz:
-                    if not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                    if not self.is_valid_cell((xc+((sx-1)/2), p1[1], zc + (sz-1)/2)):
                         return False
                     xc = xc + sx
                     f = f - dz
                 # Case Two
-                if f != 0 and not self.is_valid_cell((xc+((sx-1)/2), p[1], zc + (sz-1)/2)):
+                if f != 0 and not self.is_valid_cell((xc+((sx-1)/2), p1[1], zc + (sz-1)/2)):
                     return False
                 # Case Three
                 if (dz == 0 and
-                    not self.is_valid_cell((xc, p[1], zc + (sz-1)/2)) and
-                    not self.is_valid_cell((xc-1, p[1], zc + (sz-1)/2))):
+                    not self.is_valid_cell((xc, p1[1], zc + (sz-1)/2)) and
+                        not self.is_valid_cell((xc-1, p1[1], zc + (sz-1)/2))):
                     return False
                 zc = zc + sz
         return True
@@ -228,23 +244,42 @@ class RRTAgent:
 
     def neighbors(self, sub, floor, level, roof, super):
         n = []
+        x, y, z = self.position
 
         for i in range(len(level)):
             # This section builds the representation of the world as we discover it
             if sub[i] != AIR:
-                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]-2, self.position[2]+PDIFF[i][1]), sub[i])
+                self.set_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1]), sub[i])
             if floor[i] != AIR:
-                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]-1, self.position[2]+PDIFF[i][1]), sub[i])
+                self.set_world_state_at_position((x+PDIFF[i][0], y-1, z+PDIFF[i][1]), floor[i])
             if level[i] != AIR:
-                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1], self.position[2]+PDIFF[i][1]), sub[i])
+                self.set_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1]), level[i])
             if roof[i] != AIR:
-                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]+1, self.position[2]+PDIFF[i][1]), sub[i])
+                self.set_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1]), roof[i])
             if super[i] != AIR:
-                self.set_world_state_at_position((self.position[0]+PDIFF[i][0], self.position[1]+2, self.position[2]+PDIFF[i][1]), sub[i])
+                self.set_world_state_at_position((x+PDIFF[i][0], y+2, z+PDIFF[i][1]), super[i])
 
-            # TODO: Generate valid neighbors for a 5x5 matrix of locations
-            # This section generates valid neighbors from the current position
-
+        # This section generates valid neighbors from the current position
+        # Check the far blocks first
+        for i in FAR:
+            if (self.los2d(self.position, (x+PDIFF[i][0], y, z+PDIFF[i][1])) and
+                    self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1])) == AIR):
+                n.append((x+PDIFF[i][0], y, z+PDIFF[i][1]))
+        for i in NEAR:
+            # Walking case
+            if self.is_valid_cell((x+PDIFF[i][0], y, z+PDIFF[i][1])):
+                n.append((x+PDIFF[i][0], y, z+PDIFF[i][1]))
+            # Jumping case
+            elif (self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1])) != AIR and
+                    self.get_world_state_at_position((x+PDIFF[i][0], y, z+PDIFF[i][1])) not in HAZARDS):
+                if (self.get_world_state_at_position((x+PDIFF[i][0], y+1, z+PDIFF[i][1])) == AIR and
+                        self.get_world_state_at_position((x+PDIFF[i][0], y+2, z+PDIFF[i][1])) == AIR):
+                    n.append((x+PDIFF[i][0], y+1, z+PDIFF[i][1]))
+            # Dropping case
+            elif self.get_world_state_at_position((x+PDIFF[i][0], y-1, z+PDIFF[i][1])) == AIR:
+                if (self.get_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1])) == AIR and
+                        self.get_world_state_at_position((x+PDIFF[i][0], y-2, z+PDIFF[i][1])) not in HAZARDS):
+                    n.append((x+PDIFF[i][0], y-1, z+PDIFF[i][1]))
 
         return n
 
@@ -258,14 +293,12 @@ class RRTAgent:
 
     def sample(self, p1, p2):
         p = random.random()
-        # TODO: This also needs a los check added to it
-        # TODO: This time we check for los
-        if 1-self.zulu <= p: #Sample towards the goal
+        # Sample towards the goal
+        if 1-self.zulu <= p:
             return self.line_to(p1, self.goal)
         elif p <= 1-self.alpha:
             return self.line_to(p1, p2)
-        # TODO: This needs a los check added to it
-        elif p <= (1-self.alpha)/self.beta:
+        elif p <= (1-self.alpha)/self.beta or not self.los2d(p1, p2):
             return self.uniform()
         else:
             return self.ellipsoid()
@@ -291,14 +324,18 @@ def dist(p1, p2):
 
 # More interesting generator string: "3;7,44*49,73,35:1,159:4,95:13,35:13,159:11,95:10,159:14,159:6,35:6,95:6;12;"
 
+
 def get_world_xdims(i):
     return MDIMS[i][0]
+
 
 def get_world_ydims(i):
     return MDIMS[i][1]
 
+
 def get_world_zdims(i):
     return MDIMS[i][2]
+
 
 def main():
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
