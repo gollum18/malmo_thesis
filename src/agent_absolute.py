@@ -536,9 +536,8 @@ class Cell:
     def __str__(self):
         return "{0}, {1}, {2}, {3}, {4}, {5}".format(self.x, self.y, self.z, self.f, self.g, self.h)
 
-#for i in range(len(missions)):
-for i in [4]:
-    agent_host = MalmoPython.AgentHost()
+agent_host = MalmoPython.AgentHost()
+for i in range(len(missions)):
 
     try:
         agent_host.parse(sys.argv)
@@ -596,7 +595,7 @@ for i in [4]:
             val = float("inf")
             for neighbor in neighbors(pos, ob.get(u'SubFloor'), ob.get(u'Floor'),
                                       ob.get(u'Level'), ob.get(u'Roof'), ob.get(u'SuperRoof')):
-                if neighbor not in closed:
+                if neighbor[0] not in closed:
                     temp = dist(neighbor[0], GOAL[i])
                     if temp + gs < val:
                         best = neighbor[0]

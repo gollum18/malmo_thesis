@@ -159,8 +159,8 @@ class RRTAgent:
         :param p: The point to check line of sight for.
         :return: True if there is line of sight (i.e. the path is not blocked), False otherwise.
         """
-        xc, xg = p1[0], p2[0]
-        zc, zg = p1[2], p2[2]
+        xc, xg = math.floor(p1[0]), math.floor(p2[0])
+        zc, zg = math.floor(p1[2]), math.floor(p2[2])
         dx, dz = xg - xc, zg - zc
         sx, sz = 0, 0
         f = 0
@@ -412,51 +412,53 @@ def get_world_zdims(i):
 
 def testrrt():
     sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
-    for i in range(len(missions)):
-        # Get the agent host
-        host = MalmoPython.AgentHost()
+    # Get the agent host
+    agent_host = MalmoPython.AgentHost()
 
-        # Parse any command line arguments
+    for i in range(len(missions)):
+
         try:
-            host.parse(sys.argv)
+            agent_host.parse(sys.argv)
         except RuntimeError as e:
             print 'ERROR:', e
-            print host.getUsage()
-        if host.receivedArgument("help"):
-            print host.getUsage()
+            print agent_host.getUsage()
+            exit(1)
+        if agent_host.receivedArgument("help"):
+            print agent_host.getUsage()
             exit(0)
 
-        mission = None
+        my_mission = None
         # Load in the mission
         with open(missions[i], 'r') as f:
             print "Loading mission from {0}".format(missions[i])
-            mission = MalmoPython.MissionSpec(f.read(), True)
-        record = MalmoPython.MissionRecordSpec()
+            my_mission = MalmoPython.MissionSpec(f.read(), True)
+        my_mission_record = MalmoPython.MissionRecordSpec()
 
-        # Attempt to start a mission
-        retries = 3
-        for retry in range(retries):
+        # Attempt to start a mission:
+        max_retries = 3
+        for retry in range(max_retries):
             try:
-                host.startMission(mission, record)
+                agent_host.startMission(my_mission, my_mission_record)
+                break
             except RuntimeError as e:
-                if retry == retries - 1:
-                    print "Error starting missions:", e
+                if retry == max_retries - 1:
+                    print "Error starting mission:", e
                     exit(1)
                 else:
                     time.sleep(2)
 
-        # Loop until mission starts
-        print "Waiting for the mission to start",
-        world = host.getWorldState()
-        while not world.has_mission_begun:
+        # Loop until mission starts:
+        print "Waiting for the mission to start ",
+        world_state = agent_host.getWorldState()
+        while not world_state.has_mission_begun:
             sys.stdout.write(".")
-            time.sleep(0.1)
-            world = host.getWorldState()
-            for error in world.errors:
+            time.sleep(1)
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
                 print "Error:", error.text
 
         print
-        print "Mission running",
+        print "Mission running ",
 
         # Create an rrt holding the agent
         rrt = RRTAgent(start=START, goal=GOALS[i], xdims=get_world_xdims(i), ydims=get_world_ydims(i),
@@ -466,17 +468,17 @@ def testrrt():
         openlist = deque()
         closedlist = set()
         path = None
-        while world.is_mission_running:
+        while world_state.is_mission_running:
             sys.stdout.write(".")
             time.sleep(.1)
-            world = host.getWorldState()
-            for error in world.errors:
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
                 print "Error:", error.text
             # TODO: Complete the first stage, discovery
             # We basically want to do a breadth first search here without ending the mission
             # The objective is to just discover the world since we do not have it coded in
-            if rrt.stage == 0 and world.number_of_observations_since_last_state > 0:
-                msg = world.observations[-1].text
+            if rrt.stage == 0 and world_state.number_of_observations_since_last_state > 0:
+                msg = world_state.observations[-1].text
                 ob = json.loads(msg)
                 rrt.position = (ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos'))
                 if rrt.position not in closedlist:
@@ -486,12 +488,12 @@ def testrrt():
                         openlist.append(neighbor)
                 if not openlist:
                     # Reset the agents position to the start
-                    host.sendCommand("tp {0} {1} {2}".format(rrt.get_start()[0], rrt.get_start()[1], rrt.get_start()[2]))
+                    agent_host.sendCommand("tp {0} {1} {2}".format(rrt.get_start()[0], rrt.get_start()[1], rrt.get_start()[2]))
                     time.sleep(.3)
                     rrt.stage = 1
                     continue
                 popped = openlist.popleft()
-                host.sendCommand("tp {0} {1} {2}".format(popped[0], popped[1], popped[2]))
+                agent_host.sendCommand("tp {0} {1} {2}".format(popped[0], popped[1], popped[2]))
                 time.sleep(.3)
             # TODO: Complete the second stage, pathing
             # At this stage, we simulate rrt on the emulated environment
@@ -505,7 +507,7 @@ def testrrt():
                     break
             elif rrt.stage == 2:
                 pos = path.pop()
-                host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
+                agent_host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
                 time.sleep(.3)
 
 def test3d():
