@@ -14,6 +14,7 @@ DIAMOND = u'diamond'
 START = (0.5, 56, 24.5)
 GOALS = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 55, -24.5], [0.5, 61, 0.5], [0.5, 56, -28.5])
 HAZARDS = [u'lava', u'water']
+MAX_DROP_HEIGHT = 20
 
 # Represents the range of blocks that are 2 steps from agent
 FAR = [0, 1, 2, 3, 4, 5, 9, 10, 14, 15, 19, 20, 21, 22, 23, 24]
@@ -137,20 +138,64 @@ class RRTAgent:
     def get_start(self):
         return self.start
 
+    def fpoint(self, p):
+        return math.floor(p[0]), math.floor(p[1]), math.floor(p[2])
+
     @staticmethod
     def dist(p1, p2):
         return math.sqrt((p1[0]-p2[0])*(p1[0]-p2[0])+(p1[1]-p2[1])*(p1[1]-p2[1])+(p1[2]-p2[2])*(p1[2]-p2[2]))
 
+    def is_blocked(self, p):
+        if self.get_world_state_at_position((math.floor(p[0]), math.floor(p[1]), math.floor(p[2]))):
+            return True
+        return False
+
+    def is_drop(self, p):
+        """
+        Determines whether a point is a drop.
+        :param p: The point to check.
+        :return: True if the point will lead to a drop, false if not.
+        """
+        fp = self.fpoint(p)
+        return True if self.get_world_state_at_position((fp[0], fp[1]-1, fp[2])) == AIR else False
+
+    def drop_distance(self, p):
+        """
+        Determines the drop height for a specific point. Only needed if a point is a drop.
+        :param p:
+        :return:
+        """
+        fp = self.fpoint(p)
+        i = 1
+        while self.get_world_state_at_position((fp[0], fp[1]+i, fp[2])) == AIR and i <= MAX_DROP_HEIGHT:
+            i += 1
+        if i > MAX_DROP_HEIGHT:
+            return -1
+        if self.get_world_state_at_position((fp[0], fp[1]+i, fp[2])) in HAZARDS:
+            return -1
+        return i-1
+
+    def is_climb(self, p):
+        fp = self.fpoint(p)
+        if self.is_blocked(fp):
+            if self.get_world_state_at_position((fp[0], fp[1]+1, fp[2])) == AIR:
+                if self.get_world_state_at_position((fp[0], fp[1]+2, fp[2])) == AIR:
+                    return True
+        return False
+
+    def is_walkable(self, p):
+        fp = self.fpoint(p)
+        s = self.get_world_state_at_position((fp[0], fp[1]-1, fp[2]))
+        if s != AIR and s not in HAZARDS:
+            return True
+        return False
+
     def is_valid_cell(self, p):
         if not self.in_bounds(p):
             return False
-        s = self.get_world_state_at_position(p)
-        sb = self.get_world_state_at_position((p[0], p[1]-1, p[2]))
-        su = self.get_world_state_at_position((p[0], p[1]+1, p[2]))
-        if sb != AIR and s not in HAZARDS:
-            if s == AIR:
-                if su == AIR:
-                    return True
+        if self.is_blocked(p):
+            return False
+        return True
 
     def los2d(self, p1, p2):
         """
@@ -415,6 +460,7 @@ def testrrt():
     for i in range(len(missions)):
         # Get the agent host
         host = MalmoPython.AgentHost()
+        host.setObservationsPolicy(MalmoPython.ObservationsPolicy.LATEST_OBSERVATION_ONLY)
 
         # Parse any command line arguments
         try:
@@ -443,7 +489,7 @@ def testrrt():
                     print "Error starting missions:", e
                     exit(1)
                 else:
-                    time.sleep(2)
+                    time.sleep(2.5)
 
         # Loop until mission starts
         print "Waiting for the mission to start",
