@@ -1,5 +1,6 @@
 # Name: agent_rrt.py
 # Description: Tries to solve three-dimensional search problems using rapidly exploring random trees.
+#   Note: In this system, Y is treated as the height parameter with X as the length and Z as the depth.
 # Date Created: 8/21/2017
 # Date Modified: 8/28/2017
 # Author: Christen Ford <cford15@mail.bw.edu>
@@ -9,7 +10,53 @@ import MalmoPython
 import math
 import random
 import time
+import sys
 
+############################
+#  PROBLEM CONSTRAINTS
+############################
+
+# The start position of the agent on each map.
+START_POS = (0.5, 56, 24.5)
+
+# The goal positions of the agent on each map.
+GOAL_POS = ((0.5, 56, -24.5),
+            (0.5, 58, -24.5),
+            (0.5, 55, -24.5),
+            (0.5, 61, 0.5),
+            (0.5, 56, -28.5))
+
+# The mission xml files.
+MISSIONS = ('./missions/pp_maze_one.py',
+            './missions/pp_maze_two.py',
+            './missions/pp_maze_three.py',
+            './missions/pp_maze_four.py',
+            './missions/pp_maze_five.py')
+
+# The dimensions of the world on each mission.
+DIMENSIONS = (((), (), ()),
+              ((), (), ()),
+              ((), (), ()),
+              ((), (), ()),
+              ((), (), ()))
+
+# Represents a block of air.
+BLOCK_AIR = u'air'
+
+# Represents the hazards blocks in Minecraft.
+BLOCK_HAZARDS = (u'lava', u'water')
+
+# Represents the dx/dz movement differentials to reach other blocks from the agent.
+# The set {0, 1, 2, 3, 4, 5, 9,10, 14, 15, 19, 20, 21, 22, 23, 24} represents blocks that are two units away.
+# The set {6, 7, 8, 11, 13, 16, 17, 18} represents blocks that are one unit away.
+# The set {12} represents the players block.
+POS_DIFFERENTIALS = {
+    0: (-2, -2), 1: (-1, -2), 2: (0, -2), 3: (1, -2), 4: (2, -2),
+    5: (-2, -1), 6: (-1, -1), 7: (0, -1), 8: (1, -1), 9: (2, -1),
+    10: (-2, 0), 11: (-1, 0), 12: (0, 0), 13: (1, 0), 14: (2, 0),
+    15: (-2, 1), 16: (-1, 1), 17: (0, 1), 18: (1, 1), 19: (2, 1),
+    20: (-2, 2), 21: (-1, 2), 22: (0, 2), 23: (1, 2), 24: (2, 2),
+}
 
 ############################
 #  UTILITY FUNCTIONS
@@ -278,12 +325,13 @@ class RRTAgent:
         Adds an obstacle to the obstacles list.
         Obstacles are stored by height level. This way when we check for collision we only check by height.
         :param p: The lower left most point of the obstacle or anchor point.
-        :return: True if we successfully added the obstacle. False otherwise
+        :return: True if we successfully added the obstacle. False otherwise.
         """
         o = (p[0], p[2])
-        if p[1] in self.obstacles.keys() and o not in self.obstacles[p[1]]:
-            self.obstacles[p[1]] = o
-            return True
+        if p[1] not in self.obstacles.keys():
+            self.obstacles[p[1]] = [o]
+        else:
+            self.obstacles[p[1]].append(o)
         return False
 
     def ellipsoid(self):
@@ -303,7 +351,7 @@ class RRTAgent:
         nodes = [self.get_root()]
 
         for i in range(self.get_max_nodes()):
-            rand = agent.uniform()
+            rand = self.uniform()
             nn = nodes[0]
             for p in nodes:
                 if distance(p.get_position(), rand) < distance(nn.get_position(), rand):
@@ -362,6 +410,7 @@ class RRTAgent:
         :return: True if there is line of sight between the two points. False otherwise.
         """
         x, y, z = p1
+        # Incrementally march p1 to p2 by a 1 unit distance each time, checking for obstacles as we go.
         while (x, y, z) != p2:
             # Calculate a new point on the line using vector calculus
             v = (p2[0] - x, p2[1] - y, p2[2] - z)
@@ -385,12 +434,12 @@ class RRTAgent:
             return p2
         else:
             # Calculate a new point on the line using vector calculus
-            v = (p2[0]-p1[0], p2[1]-p1[1], p2[2]-p1[2])
-            l = math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])
+            v = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
+            l = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
             v = (v[0]/l, v[1]/l, v[2]/l)
-            x = p1[0] + random.uniform(0.0, self.get_max_branch_distance())*v[0]
-            y = p1[1] + random.uniform(0.0, self.get_max_branch_distance())*v[1]
-            z = p1[2] + random.uniform(0.0, self.get_max_branch_distance())*v[2]
+            x = p1[0] + random.uniform(0.0, self.get_max_branch_distance()) * v[0]
+            y = p1[1] + random.uniform(0.0, self.get_max_branch_distance()) * v[1]
+            z = p1[2] + random.uniform(0.0, self.get_max_branch_distance()) * v[2]
             return x, y, z
 
     def sample(self, p1, p2):
@@ -403,14 +452,26 @@ class RRTAgent:
         p = random.random()
         # Note: Reversing the comparison operator below creates a heavy bias towards the goal
         if p >= 1-self.get_goal_probability():
-            return self.line_to(p1, self.get_goal())
+            point = self.line_to(p1, self.get_goal())
+            while self.is_blocked(point):
+                point = self.line_to(p1, self.get_goal())
+            return point
         elif p <= 1-self.get_line_probability():
-            return self.line_to(p1, p2)
+            point = self.line_to(p1, p2)
+            while self.is_blocked(point):
+                point = self.line_to(p1, p2)
+            return point
         elif (p <= (1-self.get_line_probability()/self.get_ellipsoid_uniform_modifier())
               or not self.line_of_sight(p1, p2)):
-            return self.uniform()
+            point = self.uniform()
+            while self.is_blocked(point):
+                point = self.uniform()
+            return point
         else:
-            return self.ellipsoid()
+            point = self.ellipsoid()
+            while self.is_blocked(point):
+                point = self.ellipsoid()
+            return point
 
     def uniform(self):
         """
@@ -421,6 +482,86 @@ class RRTAgent:
                             self.get_ymin(), self.get_ymax(),
                             self.get_zmin(), self.get_zmax())
 
-if __name__ == '__main__':
+############################
+#  MAIN METHODS
+############################
+
+
+def malmo_agent_test():
+    """
+    Runs Malmo missions. Note: A dormant Malmo server must be running in order for this method to run properly.
+    :return: N/A
+    """
+
+    #######################
+    # BEGIN INITIALIZATION
+    #######################
+
+    for i in range(len(MISSIONS)):
+        agent_host = MalmoPython.AgentHost()
+
+        try:
+            agent_host.parse(sys.argv)
+        except RuntimeError as e:
+            print 'ERROR: ', e
+            print agent_host.getUsage()
+            exit(1)
+        if agent_host.receivedArgument("help"):
+            print agent_host.getUsage()
+            exit(0)
+
+        my_mission = None
+        # Load in the mission:
+        with open(MISSIONS[i], 'r') as f:
+            print "Loading mission from ", MISSIONS[i]
+            my_mission = MalmoPython.MissionSpec(f.read(), True)
+        my_mission_record = MalmoPython.MissionRecordSpec
+
+        # Attempt to start a mission:
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                agent_host.startMission(my_mission, my_mission_record)
+                break
+            except RuntimeError as e:
+                if retry == max_retries - 1:
+                    print "Error starting mission: ", e
+                    exit(1)
+                else:
+                    time.sleep(2)
+
+        # Loop until mission starts:
+        print "Waiting for the mission to start ",
+        world_state = agent_host.getWorldState()
+        while not world_state.has_mission_begun:
+            sys.stdout.write(".")
+            time.sleep(1)
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print "Error: ", error.text
+
+        print
+        print "Mission running ",
+
+        #######################
+        # END INITIALIZATION
+        #######################
+
+        # Insert agent code here.
+
+def random_world_test():
+    """
+    Runs a randomized test of RRT.
+    :return: N/A
+    """
     agent = RRTAgent()
+    for i in range(10):
+        x, y, z = agent.uniform()
+        x = math.floor(x)
+        y = math.floor(y)
+        z = math.floor(z)
+        agent.add_obstacle((x, y, z))
     print agent.explore()
+
+if __name__ == '__main__':
+    random_world_test()
