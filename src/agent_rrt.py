@@ -348,6 +348,23 @@ class RRTAgent:
         Runs the rapidly-exploring random tree algorithm.
         :return: The path if one is found. An empty list otherwise.
         """
+
+        def nearest_neighbor(n):
+            """
+            Finds the nearest neighbor node to the specified node.
+            Currently it implements a sequential search on the nodes list.
+            :param n: The node to find nearest neighbor to.
+            :return: The node that is closest to node n.
+            """
+            nn = nodes[0]
+            val = distance(n.get_position(), nn.get_position())
+            for node in nodes:
+                dist = distance(n.get_position(), node.get_position())
+                if dist < val:
+                    nn = node
+                    val = dist
+            return nn
+
         nodes = [self.get_root()]
 
         for i in range(self.get_max_nodes()):
