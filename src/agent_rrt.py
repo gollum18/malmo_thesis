@@ -1,3 +1,9 @@
+# Name: agent_rrt.py
+# Description: Tries to solve three-dimensional search problems using rapidly exploring random trees.
+# Date Created: 8/21/2017
+# Date Modified: 8/28/2017
+# Author: Christen Ford <cford15@mail.bw.edu>
+
 from __future__ import division
 import MalmoPython
 import math
