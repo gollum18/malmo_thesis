@@ -4,8 +4,9 @@ import math
 import random
 import time
 
+
 ############################
-##  UTILITY FUNCTIONS
+#  UTILITY FUNCTIONS
 ############################
 
 
@@ -26,7 +27,7 @@ def random_point(lbx, ubx, lby, uby, lbz, ubz):
     :param ubx: The upper x bound.
     :param lby: The lower y bound.
     :param uby: The upper y bound.
-    :param lbz: THe lower z bound.
+    :param lbz: The lower z bound.
     :param ubz: The upper z bound.
     :return: A point that has been sampled from the region specified by the bounds.
     """
@@ -54,7 +55,7 @@ def reconstruct_path(node):
 class RRTNode:
 
     ############################
-    ##  CONSTRUCTOR
+    #  CONSTRUCTOR
     ############################
 
     def __init__(self, position, parent=None):
@@ -66,7 +67,7 @@ class RRTNode:
         self.parent = parent
 
     ############################
-    ##  ACCESSORS/MUTATORS
+    #  ACCESSORS/MUTATORS
     ############################
 
     def get_parent(self):
@@ -87,7 +88,7 @@ class RRTNode:
 class RRTAgent:
 
     ############################
-    ##  CONSTRUCTOR
+    #  CONSTRUCTOR
     ############################
 
     def __init__(self, start=(0, 0, 0), goal=(10, 5, 10),
@@ -130,7 +131,7 @@ class RRTAgent:
         self.obstacles = {}
 
     ############################
-    ##  ACCESSORS/MUTATORS
+    #  ACCESSORS/MUTATORS
     ############################
 
     def get_root(self):
@@ -263,7 +264,7 @@ class RRTAgent:
         return self.obstacles[y]
 
     ############################
-    ##  METHODS
+    #  METHODS
     ############################
 
     def add_obstacle(self, p):
@@ -347,6 +348,26 @@ class RRTAgent:
             return True
         return False
 
+    def line_of_sight(self, p1, p2):
+        """
+        Determines the line of sight between two points.
+        :param p1: The starting point.
+        :param p2: The ending point.
+        :return: True if there is line of sight between the two points. False otherwise.
+        """
+        x, y, z = p1
+        while (x, y, z) != p2:
+            # Calculate a new point on the line using vector calculus
+            v = (p2[0] - x, p2[1] - y, p2[2] - z)
+            l = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+            v = (v[0] / l, v[1] / l, v[2] / l)
+            x = p1[0] + v[0]
+            y = p1[1] + v[1]
+            z = p1[2] + v[2]
+            if self.is_blocked((x, y, z)):
+                return False
+        return True
+
     def line_to(self, p1, p2):
         """
         Randomly samples a point on the line <p1, p2>.
@@ -357,6 +378,7 @@ class RRTAgent:
         if distance(p1, p2) < self.get_max_branch_distance():
             return p2
         else:
+            # Calculate a new point on the line using vector calculus
             v = (p2[0]-p1[0], p2[1]-p1[1], p2[2]-p1[2])
             l = math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])
             v = (v[0]/l, v[1]/l, v[2]/l)
@@ -378,7 +400,8 @@ class RRTAgent:
             return self.line_to(p1, self.get_goal())
         elif p <= 1-self.get_line_probability():
             return self.line_to(p1, p2)
-        elif p <= (1-self.get_line_probability()/self.get_ellipsoid_uniform_modifier()):
+        elif (p <= (1-self.get_line_probability()/self.get_ellipsoid_uniform_modifier())
+              or not self.line_of_sight(p1, p2)):
             return self.uniform()
         else:
             return self.ellipsoid()
