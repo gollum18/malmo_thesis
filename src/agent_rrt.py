@@ -325,8 +325,9 @@ class RRTAgent:
         :param p: The point to check.
         :return: True if the point is contained within an obstacle. False otherwise.
         """
-        if p[1] in self.obstacles.keys():
-            for o in self.obstacles[p[1]]:
+        fy = math.floor(p[1])
+        if fy in self.obstacles.keys():
+            for o in self.obstacles[fy]:
                 if (o[0] <= p[0] <= o[0] + 1 and
                         o[1] <= p[2] <= o[1] + 1):
                     return True
