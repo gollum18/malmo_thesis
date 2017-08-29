@@ -9,8 +9,10 @@ from __future__ import division
 import MalmoPython
 import math
 import random
+import json
 import time
 import sys
+import os
 
 ############################
 #  PROBLEM CONSTRAINTS
@@ -34,14 +36,18 @@ MISSIONS = ('./missions/pp_maze_one.py',
             './missions/pp_maze_five.py')
 
 # The dimensions of the world on each mission.
-DIMENSIONS = (((), (), ()),
-              ((), (), ()),
-              ((), (), ()),
-              ((), (), ()),
-              ((), (), ()))
+DIMENSIONS = (((-25, 25), (55, 70), (-25, 25)),
+              ((-25, 25), (55, 70), (-25, 25)),
+              ((-25, 25), (55, 70), (-25, 25)),
+              ((-25, 25), (55, 70), (-25, 25)),
+              ((-3, 3), (55, 75), (-30, 25)))
 
 # Represents a block of air.
 BLOCK_AIR = u'air'
+
+# Used to elicit a new observation from the world state without physically having to move
+START_JUMPING = "jump 1"
+END_JUMPING = "jump 0"
 
 # Represents the hazards blocks in Minecraft.
 BLOCK_HAZARDS = (u'lava', u'water')
@@ -182,6 +188,7 @@ class RRTAgent:
         self.charlie = charlie
         self.radii = sigma, tau, upsilon
         self.obstacles = {}
+        self.hazards = {}
 
     ############################
     #  ACCESSORS/MUTATORS
@@ -314,25 +321,44 @@ class RRTAgent:
         return self.radii[2]
 
     def get_obstacles(self, y):
+        if y not in self.obstacles.keys():
+            raise ValueError
         return self.obstacles[y]
+
+    def get_hazards(self, y):
+        if y not in self.hazards.keys():
+            raise ValueError
+        return self.hazards[y]
 
     ############################
     #  METHODS
     ############################
+
+    def add_hazard(self, p):
+        """
+        Adds a hazards to the hazards list.
+        Like obstacles, hazards are stored by height level.
+        :param p: The lower left most point of the hazard or anchor point.
+        :return: N/A
+        """
+        h = (p[0], p[2])
+        if p[1] not in self.hazards.keys():
+            self.hazards[p[1]] = [h]
+        else:
+            self.hazards[p[1]].append(h)
 
     def add_obstacle(self, p):
         """
         Adds an obstacle to the obstacles list.
         Obstacles are stored by height level. This way when we check for collision we only check by height.
         :param p: The lower left most point of the obstacle or anchor point.
-        :return: True if we successfully added the obstacle. False otherwise.
+        :return: N/A
         """
         o = (p[0], p[2])
         if p[1] not in self.obstacles.keys():
             self.obstacles[p[1]] = [o]
         else:
             self.obstacles[p[1]].append(o)
-        return False
 
     def ellipsoid(self):
         """
@@ -348,23 +374,6 @@ class RRTAgent:
         Runs the rapidly-exploring random tree algorithm.
         :return: The path if one is found. An empty list otherwise.
         """
-
-        def nearest_neighbor(n):
-            """
-            Finds the nearest neighbor node to the specified node.
-            Currently it implements a sequential search on the nodes list.
-            :param n: The node to find nearest neighbor to.
-            :return: The node that is closest to node n.
-            """
-            nn = nodes[0]
-            val = distance(n.get_position(), nn.get_position())
-            for node in nodes:
-                dist = distance(n.get_position(), node.get_position())
-                if dist < val:
-                    nn = node
-                    val = dist
-            return nn
-
         nodes = [self.get_root()]
 
         for i in range(self.get_max_nodes()):
@@ -419,6 +428,28 @@ class RRTAgent:
             return True
         return False
 
+    def is_hazard(self, p):
+        """
+        Determines if a point is a hazard or not.
+        :param p: The point to check.
+        :return: True if the point is a hazard. False Otherwise.
+        """
+        if p[1] in self.hazards.keys():
+            if (p[0], p[2]) in self.hazards[p[1]]:
+                return True
+        return False
+
+    def is_obstacle(self, p):
+        """
+        Performs a quick lookup to determine whether a point is an obstacle or not.
+        :param p: The point to check.
+        :return: True if the point is an obstacle. False otherwise.
+        """
+        if p[1] in self.obstacles.keys():
+            if (p[0], p[2]) in self.obstacles[p[1]]:
+                return True
+        return False
+
     def line_of_sight(self, p1, p2):
         """
         Determines the line of sight between two points.
@@ -459,6 +490,42 @@ class RRTAgent:
             z = p1[2] + random.uniform(0.0, self.get_max_branch_distance()) * v[2]
             return x, y, z
 
+    def process_observation(self, pos, below, level, above, above2, below2=None):
+        """
+        Processes an observation from the Malmo Agent Host.
+        :param pos: The agents current position.
+        :param below: The 5x5 grid one unit below the agent.
+        :param level: The 5x5 grid directly level to the agent.
+        :param above: The 5x5 grid one unite above the agent.
+        :param above2: The 5x5 grid two units above the agent.
+        :param below2: The 5x5 grid two units below the agent.
+        :return: N/A
+        """
+
+        x, y, z = math.floor(pos[0]), math.floor(pos[1]), math.floor(pos[2])
+
+        def process_helper(grid, dy):
+            """
+            Helper method to check for and add obstacles/hazards to the agents world model.
+            :param grid: The particular observation grid this obstacle/hazard came from.
+            :param dy: The difference in y between the agent and the observation grid.
+            :return: N/A
+            """
+            if grid[i] != BLOCK_AIR:
+                # Check for obstacle
+                p = x + POS_DIFFERENTIALS[i][0], y + dy, z + POS_DIFFERENTIALS[i][1]
+                if not self.is_obstacle(p):
+                    self.add_obstacle(p)
+
+        # Need to process each observation and add in any obstacles we encounter
+        for i in range(len(below)):
+            process_helper(below, -1)
+            process_helper(level, 0)
+            process_helper(above, 1)
+            process_helper(above2, 2)
+            if below2:
+                process_helper(below2, -2)
+
     def sample(self, p1, p2):
         """
         Samples a point in the search space.
@@ -470,23 +537,23 @@ class RRTAgent:
         # Note: Reversing the comparison operator below creates a heavy bias towards the goal
         if p >= 1-self.get_goal_probability():
             point = self.line_to(p1, self.get_goal())
-            while self.is_blocked(point):
+            while self.is_blocked(point) or self.is_hazard(point):
                 point = self.line_to(p1, self.get_goal())
             return point
         elif p <= 1-self.get_line_probability():
             point = self.line_to(p1, p2)
-            while self.is_blocked(point):
+            while self.is_blocked(point) or self.is_hazard(point):
                 point = self.line_to(p1, p2)
             return point
         elif (p <= (1-self.get_line_probability()/self.get_ellipsoid_uniform_modifier())
               or not self.line_of_sight(p1, p2)):
             point = self.uniform()
-            while self.is_blocked(point):
+            while self.is_blocked(point) or self.is_hazard(point):
                 point = self.uniform()
             return point
         else:
             point = self.ellipsoid()
-            while self.is_blocked(point):
+            while self.is_blocked(point) or self.is_hazard(point):
                 point = self.ellipsoid()
             return point
 
