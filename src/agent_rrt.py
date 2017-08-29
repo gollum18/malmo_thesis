@@ -64,6 +64,12 @@ POS_DIFFERENTIALS = {
     20: (-2, 2), 21: (-1, 2), 22: (0, 2), 23: (1, 2), 24: (2, 2),
 }
 
+FAR = [0, 1, 2, 3, 4, 5, 9, 10, 14, 15, 19, 20, 21, 22, 23, 24]
+
+NEAR = [6, 7, 8, 11, 13, 16, 17, 18]
+
+PLAYER = 12
+
 ############################
 #  UTILITY FUNCTIONS
 ############################
@@ -369,7 +375,7 @@ class RRTAgent:
                             -self.get_z_radius(), self.get_z_radius(),
                             -self.get_z_radius(), self.get_z_radius())
 
-    def explore(self):
+    def generate_path(self):
         """
         Runs the rapidly-exploring random tree algorithm.
         :return: The path if one is found. An empty list otherwise.
@@ -490,41 +496,73 @@ class RRTAgent:
             z = p1[2] + random.uniform(0.0, self.get_max_branch_distance()) * v[2]
             return x, y, z
 
-    def process_observation(self, pos, below, level, above, above2, below2=None):
+    def generate_neighbors(self, pos, sub, level, above, above2, sub2):
         """
-        Processes an observation from the Malmo Agent Host.
-        :param pos: The agents current position.
-        :param below: The 5x5 grid one unit below the agent.
-        :param level: The 5x5 grid directly level to the agent.
-        :param above: The 5x5 grid one unite above the agent.
-        :param above2: The 5x5 grid two units above the agent.
-        :param below2: The 5x5 grid two units below the agent.
-        :return: N/A
+        Generates valid neighbors from a position.
+        :param sub: The grid one unit below the agent.
+        :param level: The grid on the same level as the agent.
+        :param above: The grid one unit above the agent.
+        :param above2: The grid two units above the agent.
+        :param sub2: The grid two units below the agent.
+        :return: A list of valid neighbors for the exploration algorithm.
         """
-
+        neighbors = []
         x, y, z = math.floor(pos[0]), math.floor(pos[1]), math.floor(pos[2])
 
-        def process_helper(grid, dy):
-            """
-            Helper method to check for and add obstacles/hazards to the agents world model.
-            :param grid: The particular observation grid this obstacle/hazard came from.
-            :param dy: The difference in y between the agent and the observation grid.
-            :return: N/A
-            """
-            if grid[i] != BLOCK_AIR:
-                # Check for obstacle
-                p = x + POS_DIFFERENTIALS[i][0], y + dy, z + POS_DIFFERENTIALS[i][1]
-                if not self.is_obstacle(p):
-                    self.add_obstacle(p)
+        for i in NEAR:
+            # TODO: Generate neighbors, obstacles, and hazards
+            # Note: We do not want to generate a neighbor for the diamond block, that will end the mission
+            # Check block at sub
+            if sub[i] == BLOCK_AIR:
+                if sub2[i] != BLOCK_AIR:
+                    if sub2[i] in BLOCK_HAZARDS:
+                        self.add_hazard((x + POS_DIFFERENTIALS[i][0], y, z + POS_DIFFERENTIALS[i][1]))
+                        self.add_hazard((x + POS_DIFFERENTIALS[i][0], y - 1, z + POS_DIFFERENTIALS[i][1]))
+                        self.add_hazard((x + POS_DIFFERENTIALS[i][0], y - 2, z + POS_DIFFERENTIALS[i][1]))
+                    else:
+                        neighbors.append((pos[0] + POS_DIFFERENTIALS[i][0], pos[1] - 1, pos[2] + POS_DIFFERENTIALS[i][1]))
+                        self.add_obstacle((x + POS_DIFFERENTIALS[i][0], y - 2, z + POS_DIFFERENTIALS[i][1]))
+            else:
+                if sub[i] in BLOCK_HAZARDS:
+                    self.add_hazard((x + POS_DIFFERENTIALS[i][0], y, z + POS_DIFFERENTIALS[i][1]))
+                else:
+                    neighbors.append((pos[0] + POS_DIFFERENTIALS[i][0], pos[1], pos[2] + POS_DIFFERENTIALS[i][1]))
+                    self.add_obstacle((x + POS_DIFFERENTIALS[i][0], y - 1, z + POS_DIFFERENTIALS[i][1]))
+            if level[i] != BLOCK_AIR:
+                if level[i] in BLOCK_HAZARDS:
+                    self.add_hazard((x + POS_DIFFERENTIALS[i][0], y + 1, z + POS_DIFFERENTIALS[i][1]))
+                elif above[i] == BLOCK_AIR and above2[i] == BLOCK_AIR:
+                    neighbors.append((pos[0] + POS_DIFFERENTIALS[i][0], pos[1] + 1, pos[2] + POS_DIFFERENTIALS[i][1]))
 
-        # Need to process each observation and add in any obstacles we encounter
-        for i in range(len(below)):
-            process_helper(below, -1)
-            process_helper(level, 0)
-            process_helper(above, 1)
-            process_helper(above2, 2)
-            if below2:
-                process_helper(below2, -2)
+        # Check for obstacles around the agent
+        if sub[PLAYER] != BLOCK_AIR:
+            if sub[PLAYER] in BLOCK_HAZARDS:
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y - 1, z + POS_DIFFERENTIALS[PLAYER][1]))
+            else:
+                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y - 1, z + POS_DIFFERENTIALS[PLAYER][1]))
+        if sub2[PLAYER] != BLOCK_AIR:
+            if sub[PLAYER] in BLOCK_HAZARDS:
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y - 1, z + POS_DIFFERENTIALS[PLAYER][1]))
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y - 2, z + POS_DIFFERENTIALS[PLAYER][1]))
+            else:
+                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y - 2, z + POS_DIFFERENTIALS[PLAYER][1]))
+        if above[PLAYER] != BLOCK_AIR:
+            if sub[PLAYER] in BLOCK_HAZARDS:
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y + 1, z + POS_DIFFERENTIALS[PLAYER][1]))
+            else:
+                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y + 1, z + POS_DIFFERENTIALS[PLAYER][1]))
+        if above2[PLAYER] != BLOCK_AIR:
+            if sub[PLAYER] in BLOCK_HAZARDS:
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y + 1, z + POS_DIFFERENTIALS[PLAYER][1]))
+                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y + 2, z + POS_DIFFERENTIALS[PLAYER][1]))
+            else:
+                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y + 2, z + POS_DIFFERENTIALS[PLAYER][1]))
+
+        return neighbors
 
     def sample(self, p1, p2):
         """
@@ -552,6 +590,7 @@ class RRTAgent:
                 point = self.uniform()
             return point
         else:
+            # TODO: Create a probability to bias towards the goal
             point = self.ellipsoid()
             while self.is_blocked(point) or self.is_hazard(point):
                 point = self.ellipsoid()
@@ -633,6 +672,8 @@ def malmo_agent_test():
 
         # Insert agent code here.
 
+        # Create a bfs agent to explore the environment
+
 def random_world_test():
     """
     Runs a randomized test of RRT.
@@ -645,7 +686,7 @@ def random_world_test():
         y = math.floor(y)
         z = math.floor(z)
         agent.add_obstacle((x, y, z))
-    print agent.explore()
+    print agent.generate_path()
 
 if __name__ == '__main__':
     random_world_test()
