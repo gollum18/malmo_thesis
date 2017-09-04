@@ -6,6 +6,7 @@
 # Author: Christen Ford <cford15@mail.bw.edu>
 
 from __future__ import division
+from Queue import Queue
 import MalmoPython
 import math
 import random
@@ -29,11 +30,11 @@ GOAL_POS = ((0.5, 56, -24.5),
             (0.5, 56, -28.5))
 
 # The mission xml files.
-MISSIONS = ('./missions/pp_maze_one.py',
-            './missions/pp_maze_two.py',
-            './missions/pp_maze_three.py',
-            './missions/pp_maze_four.py',
-            './missions/pp_maze_five.py')
+MISSIONS = ('./missions/pp_maze_one.xml',
+            './missions/pp_maze_two.xml',
+            './missions/pp_maze_three.xml',
+            './missions/pp_maze_four.xml',
+            './missions/pp_maze_five.xml')
 
 # The dimensions of the world on each mission.
 DIMENSIONS = (((-25, 25), (55, 70), (-25, 25)),
@@ -57,18 +58,12 @@ BLOCK_HAZARDS = (u'lava', u'water')
 # The set {6, 7, 8, 11, 13, 16, 17, 18} represents blocks that are one unit away.
 # The set {12} represents the players block.
 POS_DIFFERENTIALS = {
-    0: (-2, -2), 1: (-1, -2), 2: (0, -2), 3: (1, -2), 4: (2, -2),
-    5: (-2, -1), 6: (-1, -1), 7: (0, -1), 8: (1, -1), 9: (2, -1),
-    10: (-2, 0), 11: (-1, 0), 12: (0, 0), 13: (1, 0), 14: (2, 0),
-    15: (-2, 1), 16: (-1, 1), 17: (0, 1), 18: (1, 1), 19: (2, 1),
-    20: (-2, 2), 21: (-1, 2), 22: (0, 2), 23: (1, 2), 24: (2, 2),
+    0: [-1, -1], 1: [0, -1], 2: [1, -1],
+    3: [-1, 0], 4: [0, 0], 5: [1, 0],
+    6: [-1, 1], 7: [0, 1], 8: [1, 1]
 }
 
-FAR = [0, 1, 2, 3, 4, 5, 9, 10, 14, 15, 19, 20, 21, 22, 23, 24]
-
-NEAR = [6, 7, 8, 11, 13, 16, 17, 18]
-
-PLAYER = 12
+PLAYER = 4
 
 ############################
 #  UTILITY FUNCTIONS
@@ -159,8 +154,8 @@ class RRTAgent:
     def __init__(self, start=(0, 0, 0), goal=(10, 5, 10),
                  xdim=(-10, 10), ydim=(-5, 5), zdim=(-10, 10),
                  alpha=0.10, beta=3.25, delta=0.05,
-                 epsilon=7.0, kappa=5000, sigma=7.0,
-                 tau=7.0, upsilon=7.0, charlie=0.5):
+                 epsilon=7.0, kappa=5000, sigma=1.0,
+                 tau=1.0, upsilon=1.0, charlie=0.5):
         """
         Creates an agent capable of generating rapidly exploring random trees over a sample space.
         This rapidly exploring random tree differs from other variants as it generates integer coordinates as opposed to
@@ -371,9 +366,11 @@ class RRTAgent:
         Samples an ellipsoidal search space around the agent.
         :return: A sample coordinate that falls within the specified radius around the agent.
         """
-        return random_point(-self.get_x_radius(), self.get_x_radius(),
-                            -self.get_z_radius(), self.get_z_radius(),
-                            -self.get_z_radius(), self.get_z_radius())
+        theta = random.uniform(-math.pi/2, math.pi/2)
+        fi = random.uniform(-math.pi, math.pi)
+        return (self.get_x_radius()*math.cos(theta)*math.cos(fi),
+                self.get_y_radius()*math.cos(theta)*math.sin(fi),
+                self.get_z_radius()*math.sin(theta))
 
     def generate_path(self):
         """
@@ -507,60 +504,25 @@ class RRTAgent:
         :return: A list of valid neighbors for the exploration algorithm.
         """
         neighbors = []
-        x, y, z = math.floor(pos[0]), math.floor(pos[1]), math.floor(pos[2])
+        x, y, z = pos[0], pos[1], pos[2]
 
-        for i in NEAR:
-            # TODO: Generate neighbors, obstacles, and hazards
-            # Note: We do not want to generate a neighbor for the diamond block, that will end the mission
-            # Check block at sub
-            if sub[i] == BLOCK_AIR:
-                if sub2[i] != BLOCK_AIR:
-                    if sub2[i] in BLOCK_HAZARDS:
-                        self.add_hazard((x + POS_DIFFERENTIALS[i][0], y, z + POS_DIFFERENTIALS[i][1]))
-                        self.add_hazard((x + POS_DIFFERENTIALS[i][0], y - 1, z + POS_DIFFERENTIALS[i][1]))
-                        self.add_hazard((x + POS_DIFFERENTIALS[i][0], y - 2, z + POS_DIFFERENTIALS[i][1]))
-                    else:
-                        neighbors.append((pos[0] + POS_DIFFERENTIALS[i][0], pos[1] - 1, pos[2] + POS_DIFFERENTIALS[i][1]))
-                        self.add_obstacle((x + POS_DIFFERENTIALS[i][0], y - 2, z + POS_DIFFERENTIALS[i][1]))
-            else:
-                if sub[i] in BLOCK_HAZARDS:
-                    self.add_hazard((x + POS_DIFFERENTIALS[i][0], y, z + POS_DIFFERENTIALS[i][1]))
-                else:
-                    neighbors.append((pos[0] + POS_DIFFERENTIALS[i][0], pos[1], pos[2] + POS_DIFFERENTIALS[i][1]))
-                    self.add_obstacle((x + POS_DIFFERENTIALS[i][0], y - 1, z + POS_DIFFERENTIALS[i][1]))
-            if level[i] != BLOCK_AIR:
-                if level[i] in BLOCK_HAZARDS:
-                    self.add_hazard((x + POS_DIFFERENTIALS[i][0], y + 1, z + POS_DIFFERENTIALS[i][1]))
-                elif above[i] == BLOCK_AIR and above2[i] == BLOCK_AIR:
-                    neighbors.append((pos[0] + POS_DIFFERENTIALS[i][0], pos[1] + 1, pos[2] + POS_DIFFERENTIALS[i][1]))
+        for i in range(9):
+            if i == PLAYER:
+                continue
+            # Check for a valid block
+            if sub[i] != BLOCK_AIR and sub[i] not in BLOCK_HAZARDS:
+                # Agent can walk here
+                if level[i] == BLOCK_AIR and above[i] == BLOCK_AIR:
+                    neighbors.append((x + POS_DIFFERENTIALS[i][0], y, z + POS_DIFFERENTIALS[i][1]))
+                elif level[i] != BLOCK_AIR and level[i] not in BLOCK_HAZARDS:
+                    # Agent can climb here
+                    if above[i] == BLOCK_AIR and above2[i] == BLOCK_AIR:
+                        neighbors.append((x + POS_DIFFERENTIALS[i][0], y + 1, z + POS_DIFFERENTIALS[i][1]))
+            elif sub[i] == BLOCK_AIR:
+                # Agent can drop here
+                if sub2[i] != BLOCK_AIR and sub2[i] not in BLOCK_HAZARDS:
+                    neighbors.append((x + POS_DIFFERENTIALS[i][0], y - 1, z + POS_DIFFERENTIALS[i][1]))
 
-        # Check for obstacles around the agent
-        if sub[PLAYER] != BLOCK_AIR:
-            if sub[PLAYER] in BLOCK_HAZARDS:
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y - 1, z + POS_DIFFERENTIALS[PLAYER][1]))
-            else:
-                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y - 1, z + POS_DIFFERENTIALS[PLAYER][1]))
-        if sub2[PLAYER] != BLOCK_AIR:
-            if sub[PLAYER] in BLOCK_HAZARDS:
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y - 1, z + POS_DIFFERENTIALS[PLAYER][1]))
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y - 2, z + POS_DIFFERENTIALS[PLAYER][1]))
-            else:
-                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y - 2, z + POS_DIFFERENTIALS[PLAYER][1]))
-        if above[PLAYER] != BLOCK_AIR:
-            if sub[PLAYER] in BLOCK_HAZARDS:
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y + 1, z + POS_DIFFERENTIALS[PLAYER][1]))
-            else:
-                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y + 1, z + POS_DIFFERENTIALS[PLAYER][1]))
-        if above2[PLAYER] != BLOCK_AIR:
-            if sub[PLAYER] in BLOCK_HAZARDS:
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y, z + POS_DIFFERENTIALS[PLAYER][1]))
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y + 1, z + POS_DIFFERENTIALS[PLAYER][1]))
-                self.add_hazard((x + POS_DIFFERENTIALS[PLAYER][0], y + 2, z + POS_DIFFERENTIALS[PLAYER][1]))
-            else:
-                self.add_obstacle((x + POS_DIFFERENTIALS[PLAYER][0], y + 2, z + POS_DIFFERENTIALS[PLAYER][1]))
 
         return neighbors
 
@@ -591,10 +553,12 @@ class RRTAgent:
             return point
         else:
             # TODO: Create a probability to bias towards the goal
-            point = self.ellipsoid()
-            while self.is_blocked(point) or self.is_hazard(point):
-                point = self.ellipsoid()
-            return point
+            x, y, z = self.ellipsoid()
+            while (not self.in_bounds(p1[0] + x, p1[1] + y, p1[2] + z) or
+                       self.is_blocked(p1[0] + x, p1[1] + y, p1[2] + z) or
+                       self.is_hazard(p1[0] + x, p1[1] + y, p1[2] + z)):
+                x, y, z = self.ellipsoid()
+            return p1[0] + x, p1[1] + y, p1[2] + z
 
     def uniform(self):
         """
@@ -638,7 +602,7 @@ def malmo_agent_test():
         with open(MISSIONS[i], 'r') as f:
             print "Loading mission from ", MISSIONS[i]
             my_mission = MalmoPython.MissionSpec(f.read(), True)
-        my_mission_record = MalmoPython.MissionRecordSpec
+        my_mission_record = MalmoPython.MissionRecordSpec()
 
         # Attempt to start a mission:
         max_retries = 3
@@ -671,8 +635,53 @@ def malmo_agent_test():
         #######################
 
         # Insert agent code here.
+        agent = RRTAgent(start=START_POS, goal=GOAL_POS[i])
 
         # Create a bfs agent to explore the environment
+        openlist = Queue()
+        openlist.put_nowait(RRTNode(agent.get_start()))
+        closedlist = set()
+        path = None
+        stage = 0
+
+        while world_state.is_mission_running:
+            sys.stdout.write(".")
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print "Error:",error.text
+            if stage == 0 and world_state.number_of_observations_since_last_state > 0:
+                msg = world_state.observations[-1].text
+                ob = json.loads(msg)
+                current = openlist.get_nowait()
+                if current.get_position() not in closedlist:
+                    closedlist.add(current.get_position())
+                    for neighbor in agent.generate_neighbors(pos=(ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos')),
+                                                         above=ob.get(u'Roof'),
+                                                         above2=ob.get(u'SuperRoof'),
+                                                         sub=ob.get(u'Floor'),
+                                                         sub2=ob.get(u'SubFloor'),
+                                                         level=ob.get(u'Level')):
+                        print neighbor
+                        openlist.put_nowait(RRTNode(neighbor, current))
+                    agent_host.sendCommand("tp {0} {1} {2}".format(current.get_position()[0],
+                                                                   current.get_position()[1],
+                                                                   current.get_position()[2]))
+                    time.sleep(.3)
+                if not openlist:
+                    agent_host.sendCommand("tp {0} {1} {2}".format(agent.get_start()[0],
+                                                                   agent.get_start()[1],
+                                                                   agent.get_start()[2]))
+                    stage = 1
+            elif stage == 1:
+                path = agent.generate_path()
+                stage = 2
+            elif stage == 2:
+                while path:
+                    current = path.pop()
+                agent_host.sendCommand("tp {0} {1} {2}".format(current.get_position()[0],
+                                                                   current.get_position()[1],
+                                                                   current.get_position()[2]))
+                time.sleep(.3)
 
 def random_world_test():
     """
