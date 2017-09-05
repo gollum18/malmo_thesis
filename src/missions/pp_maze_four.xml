@@ -49,32 +49,10 @@
 		</AgentStart>
 		<AgentHandlers>
 			<ObservationFromFullStats/>
-			<ObservationFromGrid>
-				<Grid name="SubFloor">
-					<min x="-1" y="-2" z="-1"/>
-					<max x="1" y="-2" z="1"/>
-				</Grid>
-				<Grid name="Floor">
-					<min x="-1" y="-1" z="-1"/>
-					<max x="1" y="-1" z="1"/>
-				</Grid>
-				<Grid name="Level">
-					<min x="-1" y="0" z="-1"/>
-					<max x="1" y="0" z="1"/>
-				</Grid>
-				<Grid name="Roof">
-					<min x="-1" y="1" z="-1"/>
-					<max x="1" y="1" z="1"/>
-				</Grid>
-				<Grid name="SuperRoof">
-					<min x="-1" y="2" z="-1"/>
-					<max x="1" y="2" z="1"/>
-				</Grid>
-			</ObservationFromGrid>
 			<AbsoluteMovementCommands/>
 			<ContinuousMovementCommands/>
 			<AgentQuitFromTouchingBlockType>
-			<Block type="diamond_block"/>
+				<Block type="diamond_block"/>
 			</AgentQuitFromTouchingBlockType>
 		</AgentHandlers>
 	</AgentSection>

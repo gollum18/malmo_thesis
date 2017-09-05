@@ -68,9 +68,7 @@ missions = [
     # Drop to goal mission
     './missions/pp_maze_three.xml',
     # Climb the big central pillar
-    './missions/pp_maze_four.xml',
-    # Time for an obstacle course, combining everything into one
-    './missions/pp_maze_five.xml'
+    './missions/pp_maze_four.xml'
 ]
 
 # Create default Malmo objects:

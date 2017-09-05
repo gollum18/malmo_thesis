@@ -1,10 +1,45 @@
 import MalmoPython
 import math
-import os
+import random
 import time
 import sys
-import random
-import json
+
+#######################################
+# CONSTANTS
+#######################################
+
+# Describes the missions boundaries for the agent
+_mission_txt = (
+    # Walk to goal mission
+    './missions/pp_maze_one.txt',
+    # Climb to goal mission
+    './missions/pp_maze_two.txt',
+    # Drop to goal mission
+    './missions/pp_maze_three.txt',
+    # Climb the big central pillar
+    './missions/pp_maze_four.txt')
+
+# Describes the mission itself in a way Malmo can interpret
+_mission_xml = (
+    # Walk to goal mission
+    './missions/pp_maze_one.xml',
+    # Climb to goal mission
+    './missions/pp_maze_two.xml',
+    # Drop to goal mission
+    './missions/pp_maze_three.xml',
+    # Climb the big central pillar
+    './missions/pp_maze_four.xml'
+)
+
+_lower_dimensions = ((-25, 55, -25), (-25, 55, -25), (-25, 54, -25), (-25, 55, -25))
+_upper_dimensions = ((25, 70, 25), (25, 70, 25), (25, 70, 25), (25, 70, 25))
+
+_start = (0.5, 56, 24.5)
+_goal = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 55, -24.5], [0.5, 61, 0.5], [0.5, 56, -28.5])
+
+_obstacle = 'obs'
+_hazard = 'haz'
+_air = 'air'
 
 #######################################
 # UTILITY FUNCTIONS
@@ -18,6 +53,50 @@ def distance(p1, p2):
     :return: The euclidean distance between the two points.
     """
     return math.sqrt((p2[0]-p1[0])*(p2[0]-p1[0])+(p2[1]-p1[1])*(p2[1]-p1[1])+(p2[2]-p1[2])*(p2[2]-p1[2]))
+
+def read_in_txt(txt):
+    """
+    Reads in information on obstacles, hazards, and air from the missions descriptor text file.
+    :param txt: The name of the mission descriptor file.
+    :return: A dictionary containing all the obstacle, hazard, and air information about a mission.
+    """
+    objects = {_obstacle: [], _hazard: []}
+    input_file = open(txt, 'r')
+    input_amt = 0
+    btype=None
+    for line in input_file.readlines():
+        if _obstacle in line:
+            input_amt = int(line.split()[1])
+            btype = _obstacle
+            continue
+        elif _hazard in line:
+            input_amt = int(line.split()[1])
+            btype = _hazard
+            continue
+        elif _air in line:
+            input_amt = int(line.split()[1])
+            btype = _air
+            continue
+        if input_amt > 0:
+            parts = line.split()
+            xl, xu, yl = int(parts[0]), int(parts[1]), int(parts[2])
+            yu, zl, zu = int(parts[3]), int(parts[4]), int(parts[5])
+            for dx in range(xu-xl+1):
+                for dy in range(yu-yl+1):
+                    for dz in range(zu-zl+1):
+                        point = xl+dx, yl+dy, zl+dz
+                        if btype == _obstacle:
+                            objects[_obstacle].append(point)
+                        elif btype == _hazard:
+                            objects[_hazard].append(point)
+                        elif btype == _air:
+                            if point in objects[_obstacle]:
+                                objects[_obstacle].remove(point)
+                            if point in objects[_hazard]:
+                                objects[_hazard].remove(point)
+            input_amt -= 1
+    input_file.close()
+    return objects
 
 #######################################
 # CLASSES
@@ -54,10 +133,10 @@ class RealTimeRapidlyExploringTreeAgent:
 
     def __init__(self,
                  start=(0, 0, 0),
-                 goal=(5, 0, 5),
-                 xdims=(-10, 10),
-                 ydims=(-5, 5),
-                 zdims=(-10, 10),
+                 goal=(10, 2, 10),
+                 xdims=(-20, 20),
+                 ydims=(-10, 10),
+                 zdims=(-20, 20),
                  p_line=.10,
                  p_goal=.05,
                  m_decider=3.25,
@@ -246,7 +325,6 @@ class RealTimeRapidlyExploringTreeAgent:
                 while current.get_parent():
                     path.append(current.get_position())
                     current = current.get_parent()
-                path.reverse()
                 return path
         return []
 
@@ -398,9 +476,86 @@ class RealTimeRapidlyExploringTreeAgent:
 # TESTING METHODS
 #######################################
 
+def malmo_test():
+    for i in range(len(_mission_xml)):
+        # Create an agent and generate a path
+
+        agent = RealTimeRapidlyExploringTreeAgent(start=_start,
+                                                  goal=_goal[i],
+                                                  xdims=(_lower_dimensions[i][0], _upper_dimensions[i][0]),
+                                                  ydims=(_lower_dimensions[i][1], _upper_dimensions[i][1]),
+                                                  zdims=(_lower_dimensions[i][2], _upper_dimensions[i][2]))
+        for key, value in read_in_txt(_mission_txt[i]).iteritems():
+            if key == _obstacle:
+                for obstacle in value:
+                    agent.add_obstacle(obstacle)
+            elif key == _hazard:
+                for hazard in value:
+                    agent.add_obstacle(hazard)
+
+        path = agent.explore()
+
+        agent_host = MalmoPython.AgentHost()
+
+        try:
+            agent_host.parse(sys.argv)
+        except RuntimeError as e:
+            print 'ERROR:', e
+            print agent_host.getUsage()
+            exit(1)
+        if agent_host.receivedArgument("help"):
+            print agent_host.getUsage()
+            exit(0)
+
+        my_mission = None
+        # Load in the mission
+        with open(_mission_xml[i], 'r') as f:
+            print "Loading mission from {0}".format(_mission_xml[i])
+            my_mission = MalmoPython.MissionSpec(f.read(), True)
+        my_mission_record = MalmoPython.MissionRecordSpec()
+
+        # Attempt to start a mission:
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                agent_host.startMission(my_mission, my_mission_record)
+                break
+            except RuntimeError as e:
+                if retry == max_retries - 1:
+                    print "Error starting mission:", e
+                    exit(1)
+                else:
+                    time.sleep(2)
+
+        # Loop until mission starts:
+        print "Waiting for the mission to start ",
+        world_state = agent_host.getWorldState()
+        while not world_state.has_mission_begun:
+            sys.stdout.write(".")
+            time.sleep(1)
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print "Error:", error.text
+
+        print
+        print "Mission running ",
+
+        # Needed to prevent skipped commands
+        time.sleep(1.5)
+
+        while world_state.is_mission_running:
+            world_state = agent_host.getWorldState()
+            loc = path.pop()
+            agent_host.sendCommand("tp {0} {1} {2}".format(loc[0], loc[1], loc[2]))
+            time.sleep(.3)
+
 def rrt_test():
     agent = RealTimeRapidlyExploringTreeAgent()
+    for i in range(random.randint(1, 20)):
+        agent.add_hazard(agent.uniform())
+    for i in range(random.randint(1, 20)):
+        agent.add_obstacle(agent.uniform())
     print agent.explore()
 
 if __name__ == '__main__':
-    rrt_test()
+    malmo_test()
