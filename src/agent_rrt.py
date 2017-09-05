@@ -1,383 +1,237 @@
-# Name: agent_rrt.py
-# Description: Tries to solve three-dimensional search problems using rapidly exploring random trees.
-#   Note: In this system, Y is treated as the height parameter with X as the length and Z as the depth.
-# Date Created: 8/21/2017
-# Date Modified: 8/28/2017
-# Author: Christen Ford <cford15@mail.bw.edu>
-
-from __future__ import division
-from Queue import Queue
 import MalmoPython
 import math
-import random
-import json
+import os
 import time
 import sys
-import os
+import random
+import json
 
-############################
-#  PROBLEM CONSTRAINTS
-############################
-
-# The start position of the agent on each map.
-START_POS = (0.5, 56, 24.5)
-
-# The goal positions of the agent on each map.
-GOAL_POS = ((0.5, 56, -24.5),
-            (0.5, 58, -24.5),
-            (0.5, 55, -24.5),
-            (0.5, 61, 0.5),
-            (0.5, 56, -28.5))
-
-# The mission xml files.
-MISSIONS = ('./missions/pp_maze_one.xml',
-            './missions/pp_maze_two.xml',
-            './missions/pp_maze_three.xml',
-            './missions/pp_maze_four.xml',
-            './missions/pp_maze_five.xml')
-
-# The dimensions of the world on each mission.
-DIMENSIONS = (((-25, 25), (55, 70), (-25, 25)),
-              ((-25, 25), (55, 70), (-25, 25)),
-              ((-25, 25), (55, 70), (-25, 25)),
-              ((-25, 25), (55, 70), (-25, 25)),
-              ((-3, 3), (55, 75), (-30, 25)))
-
-# Represents a block of air.
-BLOCK_AIR = u'air'
-
-# Used to elicit a new observation from the world state without physically having to move
-START_JUMPING = "jump 1"
-END_JUMPING = "jump 0"
-
-# Represents the hazards blocks in Minecraft.
-BLOCK_HAZARDS = (u'lava', u'water')
-
-# Represents the dx/dz movement differentials to reach other blocks from the agent.
-# The set {0, 1, 2, 3, 4, 5, 9,10, 14, 15, 19, 20, 21, 22, 23, 24} represents blocks that are two units away.
-# The set {6, 7, 8, 11, 13, 16, 17, 18} represents blocks that are one unit away.
-# The set {12} represents the players block.
-POS_DIFFERENTIALS = {
-    0: [-1, -1], 1: [0, -1], 2: [1, -1],
-    3: [-1, 0], 4: [0, 0], 5: [1, 0],
-    6: [-1, 1], 7: [0, 1], 8: [1, 1]
-}
-
-PLAYER = 4
-
-############################
-#  UTILITY FUNCTIONS
-############################
-
+#######################################
+# UTILITY FUNCTIONS
+#######################################
 
 def distance(p1, p2):
     """
-    Determines the distance between two three-dimensional points.
+    Determines the 3D euclidean distance between two points.
     :param p1: The first point.
     :param p2: The second point.
-    :return: The distance between the two points.
+    :return: The euclidean distance between the two points.
     """
     return math.sqrt((p2[0]-p1[0])*(p2[0]-p1[0])+(p2[1]-p1[1])*(p2[1]-p1[1])+(p2[2]-p1[2])*(p2[2]-p1[2]))
 
+#######################################
+# CLASSES
+#######################################
 
-def random_point(lbx, ubx, lby, uby, lbz, ubz):
-    """
-    Randomly samples a point based on some bounds.
-    :param lbx: The lower x bound.
-    :param ubx: The upper x bound.
-    :param lby: The lower y bound.
-    :param uby: The upper y bound.
-    :param lbz: The lower z bound.
-    :param ubz: The upper z bound.
-    :return: A point that has been sampled from the region specified by the bounds.
-    """
-    return (random.uniform(lbx, ubx),
-            random.uniform(lby, uby),
-            random.uniform(lbz, ubz))
+class RealTimeRapidlyExploringTreeNode:
 
-
-def reconstruct_path(node):
-    """
-    Reconstructs the path the agent should follow to get to the goal.
-    :param node: The node that meets the goal state requirements.
-    :return: The path the agent should follow.
-    """
-    path = [node.get_position()]
-
-    while node.get_parent():
-        node = node.get_parent()
-        path.append(node.get_position())
-    path.reverse()
-
-    return path
-
-
-class RRTNode:
-
-    ############################
-    #  CONSTRUCTOR
-    ############################
+    #######################################
+    # CONSTRUCTOR
+    #######################################
 
     def __init__(self, position, parent=None):
-        """
-        Creates a node for a rapidly exploring random tree.
-        :param position:
-        """
         self.position = position
         self.parent = parent
 
-    ############################
-    #  ACCESSORS/MUTATORS
-    ############################
-
-    def get_parent(self):
-        """
-        Gets the parent of this node.
-        :return: The parent node.
-        """
-        return self.parent
+    #######################################
+    # ACCESSORS/MUTATORS
+    #######################################
 
     def get_position(self):
-        """
-        Gets the position of this node.
-        :return: The position of this node.
-        """
         return self.position
 
+    def get_parent(self):
+        return self.parent
 
-class RRTAgent:
+    def set_parent(self, parent):
+        self.parent = parent
 
-    ############################
-    #  CONSTRUCTOR
-    ############################
+class RealTimeRapidlyExploringTreeAgent:
 
-    def __init__(self, start=(0, 0, 0), goal=(10, 5, 10),
-                 xdim=(-10, 10), ydim=(-5, 5), zdim=(-10, 10),
-                 alpha=0.10, beta=3.25, delta=0.05,
-                 epsilon=7.0, kappa=5000, sigma=1.0,
-                 tau=1.0, upsilon=1.0, charlie=0.5):
-        """
-        Creates an agent capable of generating rapidly exploring random trees over a sample space.
-        This rapidly exploring random tree differs from other variants as it generates integer coordinates as opposed to
-        floating point coordinates.
-        :param start: The starting position of the agent.
-        :param goal: The goal position of the agent.
-        :param xdim: The x dimensions of the search space.
-        :param ydim: The y dimensions of the search space.
-        :param zdim: The z dimensions of the search space.
-        :param alpha: The probability of sampling using the line-to algorithm. Default is 0.10.
-        :param beta: The modifier used when sampling with the ellipsoid/uniform algorithms. Default is 3.25.
-        :param delta: The probability of sampling towards the goal. Default is 0.05.
-        :param epsilon: The max distance allowed between a parent node and child node. Default is 7.0.
-        :param kappa: The maximum number of nodes the tree is allowed to generate per search. Default is 5,000.
-        :param sigma: The radius of the sampling ellipsoid along the x plane.
-        :param tau:: The radius of the sampling ellipsoid along the y plane.
-        :param upsilon: The radius of the sampling ellipsoid along the z plane.
-        :param charlie: The goal check tolerance. Default is 0.5.
-        """
-        self.root = RRTNode(start)
+    #######################################
+    # CONSTRUCTOR
+    #######################################
+
+    def __init__(self,
+                 start=(0, 0, 0),
+                 goal=(5, 0, 5),
+                 xdims=(-10, 10),
+                 ydims=(-5, 5),
+                 zdims=(-10, 10),
+                 p_line=.10,
+                 p_goal=.05,
+                 m_decider=3.25,
+                 num_nodes=5000,
+                 xradius=1,
+                 yradius=1,
+                 zradius=1,
+                 g_tolerance=0.5,
+                 max_distance=7.0,
+                 obsx=1,
+                 obsy=1,
+                 obsz=1,
+                 hazx=1,
+                 hazy=1,
+                 hazz=1,
+                 movement_distance=1):
         self.start = start
         self.goal = goal
-        self.xdim = xdim
-        self.ydim = ydim
-        self.zdim = zdim
-        self.alpha = alpha
-        self.beta = beta
-        self.delta = delta
-        self.epsilon = epsilon
-        self.kappa = kappa
-        self.charlie = charlie
-        self.radii = sigma, tau, upsilon
+        self.xdims = xdims
+        self.ydims = ydims
+        self.zdims = zdims
+        self.line_probability = p_line
+        self.goal_probability = p_goal
+        self.randomizer = m_decider
+        self.nodes = num_nodes
+        self.radii = xradius, yradius, zradius
+        self.goal_tolerance = g_tolerance
+        self.max_distance = max_distance
+        self.obs_dims = obsx, obsy, obsz
+        self.haz_dims = hazx, hazy, hazz
+        self.movement_distance = movement_distance
         self.obstacles = {}
         self.hazards = {}
 
-    ############################
-    #  ACCESSORS/MUTATORS
-    ############################
-
-    def get_root(self):
-        """
-        Returns the root node of the tree.
-        :return: The root node of the tree.
-        """
-        return self.root
+    #######################################
+    # ACCESSORS/MUTATORS
+    #######################################
 
     def get_start(self):
-        """
-        Gets the starting position of the agent.
-        :return: The starting position of the agent.
-        """
         return self.start
 
     def get_goal(self):
-        """
-        Gets the goal position of the agent.
-        :return: The goal position of the agent.
-        """
         return self.goal
 
+    def get_xdims(self):
+        return self.xdims
+
+    def get_ydims(self):
+        return self.ydims
+
+    def get_zdims(self):
+        return self.zdims
+
     def get_xmin(self):
-        """
-        Gets the minimum x dimension of the search space.
-        :return: The minimum x dimension of the search space.
-        """
-        return min(self.xdim)
+        return min(self.xdims)
 
     def get_xmax(self):
-        """
-        Gets the maximum x dimension of the search space.
-        :return: The maximum x dimension of the search space.
-        """
-        return max(self.xdim)
+        return max(self.xdims)
 
     def get_ymin(self):
-        """
-        Gets the minimum y dimension of the search space.
-        :return: The minimum y dimension of the search space.
-        """
-        return min(self.ydim)
+        return min(self.ydims)
 
     def get_ymax(self):
-        """
-        Gets the maximum y dimension of the search space.
-        :return: The maximum y dimension of the search space.
-        """
-        return max(self.ydim)
+        return max(self.ydims)
 
     def get_zmin(self):
-        """
-        Gets the minimum z dimension of the search space.
-        :return: The minimum z dimension of the search space.
-        """
-        return min(self.zdim)
+        return min(self.zdims)
 
     def get_zmax(self):
-        """
-        Gets the maximum z dimension of the search space.
-        :return: The maximum z dimension of the search space.
-        """
-        return max(self.zdim)
+        return max(self.zdims)
 
     def get_line_probability(self):
-        """
-        Gets the probability of utilizing the line-to sampling algorithm.
-        :return: The probability of the line-to sampling algorithm.
-        """
-        return self.alpha
-
-    def get_ellipsoid_uniform_modifier(self):
-        """
-        Gets the modifier used when sampling with either the ellipsoid or uniform sampling algorithms.
-        :return: The modifier of sampling using ellipsoid of uniform algorithms.
-        """
-        return self.beta
+        return self.line_probability
 
     def get_goal_probability(self):
-        """
-        Gets the probability of sampling towards the goal.
-        :return: Probability of sampling towards the goal.
-        """
-        return self.delta
+        return self.goal_probability
 
-    def get_goal_tolerance(self):
-        """
-        Gets the goal tolerance.
-        :return: The goal tolerance.
-        """
-        return self.charlie
-
-    def get_max_branch_distance(self):
-        """
-        Gest the maximum distance allowed between parent and child nodes.
-        :return: The maximum distance allowed between parent and child nodes.
-        """
-        return self.epsilon
+    def get_randomizer(self):
+        return self.randomizer
 
     def get_max_nodes(self):
-        """
-        Gets the maximum number of nodes allowed in a single search instance.
-        :return: The maximum number of nodes allowed in a single search instance.
-        """
-        return self.kappa
+        return self.nodes
 
-    def get_x_radius(self):
-        """
-        Gets the x radius of the ellipsoidal search space surrounding the agent.
-        :return: The x radius.
-        """
+    def get_xradius(self):
         return self.radii[0]
 
-    def get_y_radius(self):
-        """
-        Gets the y radius of the ellipsoidal search space surrounding the agent.
-        :return: The y radius.
-        """
+    def get_yradius(self):
         return self.radii[1]
 
-    def get_z_radius(self):
-        """
-        Gest the z radius of the ellipsoidal search space surrounding the agent.
-        :return: The z radius.
-        """
+    def get_zradius(self):
         return self.radii[2]
 
-    def get_obstacles(self, y):
-        if y not in self.obstacles.keys():
-            raise ValueError
-        return self.obstacles[y]
+    def get_goal_tolerance(self):
+        return self.goal_tolerance
 
-    def get_hazards(self, y):
-        if y not in self.hazards.keys():
-            raise ValueError
-        return self.hazards[y]
+    def get_max_branch_distance(self):
+        return self.max_distance
 
-    ############################
-    #  METHODS
-    ############################
+    def get_obstacle_dimensions(self):
+        return self.obs_dims
+
+    def get_hazard_dimensions(self):
+        return self.haz_dims
+
+    def get_movement_distance(self):
+        return self.movement_distance
+
+    def get_obstacles(self):
+        return self.obstacles
+
+    def get_hazards(self):
+        return self.hazards
+
+    #######################################
+    # METHODS
+    #######################################
 
     def add_hazard(self, p):
         """
-        Adds a hazards to the hazards list.
-        Like obstacles, hazards are stored by height level.
-        :param p: The lower left most point of the hazard or anchor point.
+        Adds a hazard to the search region.
+        :param p: The bottom, lower-left point of the hazard.
         :return: N/A
         """
-        h = (p[0], p[2])
         if p[1] not in self.hazards.keys():
-            self.hazards[p[1]] = [h]
+            self.hazards[p[1]] = list((p[0], p[2]))
         else:
-            self.hazards[p[1]].append(h)
+            self.hazards[p[1]].append((p[0], p[2]))
 
     def add_obstacle(self, p):
         """
-        Adds an obstacle to the obstacles list.
-        Obstacles are stored by height level. This way when we check for collision we only check by height.
-        :param p: The lower left most point of the obstacle or anchor point.
+        Adds an obstacle to the search region.
+        :param p: The bottom, lower-left point of the obstacle.
         :return: N/A
         """
-        o = (p[0], p[2])
         if p[1] not in self.obstacles.keys():
-            self.obstacles[p[1]] = [o]
+            self.obstacles[p[1]] = list((p[0], p[2]))
         else:
-            self.obstacles[p[1]].append(o)
+            self.obstacles[p[1]].append((p[0], p[2]))
 
     def ellipsoid(self):
         """
-        Samples an ellipsoidal search space around the agent.
-        :return: A sample coordinate that falls within the specified radius around the agent.
+        Samples an ellipsoidal search region around the agent.
+        :return: A point from the region immediately surrounding the agent.
         """
-        theta = random.uniform(-math.pi/2, math.pi/2)
+        theta = random.uniform(-math.pi / 2, math.pi / 2)
         fi = random.uniform(-math.pi, math.pi)
-        return (self.get_x_radius()*math.cos(theta)*math.cos(fi),
-                self.get_y_radius()*math.cos(theta)*math.sin(fi),
-                self.get_z_radius()*math.sin(theta))
+        return (self.radii[0] * math.cos(theta) * math.cos(fi),
+                self.radii[1] * math.cos(theta) * math.sin(fi),
+                self.radii[2] * math.sin(theta))
 
-    def generate_path(self):
+    def explore(self):
         """
-        Runs the rapidly-exploring random tree algorithm.
-        :return: The path if one is found. An empty list otherwise.
+        Finds a path utilizing a rapidly-exploring random tree.
+        :return: The path if it is found, or an empty list if it is not.
         """
-        nodes = [self.get_root()]
+
+        def find_nearest_neighbor(node):
+            """
+            Finds the nearest neighbor across all nodes in the search tree to the specified node.
+            :param node: The node to find nearest neighbor of.
+            :return: The node in the search tree that is closest to the specified node.
+            """
+            best_node = nodes[0]
+            best_distance = distance(nodes[0].get_position(), node)
+            for j in range(1, len(nodes)):
+                if nodes[j].get_position() == node.get_position():
+                    continue
+                v = distance(nodes[j].get_position(), node)
+                if v < best_distance:
+                    best_node = nodes[j]
+                    best_distance = v
+            return best_node
+
+        nodes = [RealTimeRapidlyExploringTreeNode(self.get_start())]
 
         for i in range(self.get_max_nodes()):
             rand = self.uniform()
@@ -385,317 +239,168 @@ class RRTAgent:
             for p in nodes:
                 if distance(p.get_position(), rand) < distance(nn.get_position(), rand):
                     nn = p
-            nodes.append(RRTNode(self.sample(nn.get_position(), rand), nn))
-            if self.is_goal(nodes[-1]):
-                return reconstruct_path(nodes[-1])
+            nodes.append(RealTimeRapidlyExploringTreeNode(self.sample(nn.get_position(), rand), nn))
+            if self.is_goal(nodes[-1].get_position()):
+                path = []
+                current = nodes[-1]
+                while current.get_parent():
+                    path.append(current.get_position())
+                    current = current.get_parent()
+                path.reverse()
+                return path
         return []
 
     def in_bounds(self, p):
         """
-        Determines whether a point is in bounds or not.
+        Determines if the point is in bounds of the search space.
         :param p: The point to check.
-        :return: True if the point is in bounds. False otherwise.
+        :return: True if the point is in bounds, False otherwise.
         """
-        x, y, z = p
-        if (self.get_xmin() <= x <= self.get_xmax() and
-                self.get_ymin() <= y <= self.get_ymax() and
-                self.get_zmin() <= y <= self.get_zmax()):
+        if (self.get_xmin() <= p[0] <= self.get_xmax() and
+                self.get_ymin() <= p[1] <= self.get_ymax() and
+                self.get_zmin() <= p[2] <= self.get_zmax()):
             return True
         return False
 
     def is_blocked(self, p):
         """
-        Determines if a point is invalid due to the region surrounding it containing an obstacle.
+        Determines if the point is a hazard or an obstacle.
         :param p: The point to check.
-        :return: True if the point is contained within an obstacle. False otherwise.
+        :return: True if the point is an obstacle or hazard, False otherwise.
         """
-        fy = math.floor(p[1])
-        if fy in self.obstacles.keys():
-            for o in self.obstacles[fy]:
-                if (o[0] <= p[0] <= o[0] + 1 and
-                        o[1] <= p[2] <= o[1] + 1):
-                    return True
+        if self.is_blocked(p) or self.is_hazard(p):
+            return True
         return False
 
-    def is_goal(self, n):
+    def is_goal(self, p):
         """
-        Determines if a specified node is the goal.
-        :param n: The node to check for goal state.
-        :return: True if the node is the goal. False otherwise.
+        Determines if a point is within the bounds of the goal or not.
+        :param p: The point to check.
+        :return: True if the point falls within the bounds of the goal, False otherwise.
         """
-        x, y, z = n.get_position()
-        t = self.get_goal_tolerance()
-        if (self.get_goal()[0] - t <= x <= self.get_goal()[0] + t and
-                self.get_goal()[1] - t <= y <= self.get_goal()[1] + t and
-                self.get_goal()[2] - t <= z <= self.get_goal()[2] + t):
+        x, y, z = p
+        if (self.goal[0] - self.goal_tolerance <= x <= self.goal[0] + self.goal_tolerance and
+                self.goal[1] - self.goal_tolerance <= y <= self.goal[1] + self.goal_tolerance and
+                self.goal[2] - self.goal_tolerance <= z <= self.goal[2] + self.goal_tolerance):
             return True
         return False
 
     def is_hazard(self, p):
         """
-        Determines if a point is a hazard or not.
+        Determines if the point is a hazard.
         :param p: The point to check.
-        :return: True if the point is a hazard. False Otherwise.
+        :return: True if the point is a hazard, False otherwise.
         """
-        if p[1] in self.hazards.keys():
-            if (p[0], p[2]) in self.hazards[p[1]]:
+        for hazard in self.hazards[p[1]]:
+            if (hazard[0] <= p[0] <= hazard[0] + self.haz_dims[0] and
+                    hazard[1] <= p[1] <= hazard[1] + self.haz_dims[1]):
                 return True
         return False
 
     def is_obstacle(self, p):
         """
-        Performs a quick lookup to determine whether a point is an obstacle or not.
+        Determines if the point is an obstacle.
         :param p: The point to check.
-        :return: True if the point is an obstacle. False otherwise.
+        :return: True if the point is an obstacle, False otherwise.
         """
-        if p[1] in self.obstacles.keys():
-            if (p[0], p[2]) in self.obstacles[p[1]]:
+        for obstacle in self.obstacles[p[1]]:
+            if (obstacle[0] <= p[0] <= obstacle[0] + self.obs_dims[0] and
+                    obstacle[1] <= p[1] <= obstacle[1] + self.obs_dims[1]):
                 return True
         return False
 
     def line_of_sight(self, p1, p2):
         """
-        Determines the line of sight between two points.
-        :param p1: The starting point.
-        :param p2: The ending point.
-        :return: True if there is line of sight between the two points. False otherwise.
+        Determines line of sight between p1 and p2.
+        :param p1: The looking point.
+        :param p2: The observed point.
+        :return: True if there is line of sight from p1 to p2.
         """
         x, y, z = p1
         # Incrementally march p1 to p2 by a 1 unit distance each time, checking for obstacles as we go.
         while (x, y, z) != p2:
-            # Calculate a new point on the line using vector calculus
-            v = (p2[0] - x, p2[1] - y, p2[2] - z)
-            l = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-            v = (v[0] / l, v[1] / l, v[2] / l)
-            x = p1[0] + v[0]
-            y = p1[1] + v[1]
-            z = p1[2] + v[2]
+            x, y, z = self.point_on_line(p1, p2)
             if self.is_blocked((x, y, z)):
                 return False
         return True
 
     def line_to(self, p1, p2):
         """
-        Randomly samples a point on the line <p1, p2>.
-        :param p1: The leading point of the line.
-        :param p2: The trailing point of the line.
-        :return: A point on the line <p1, p2>.
+        Gets a point on the line between p1 and p2.
+        :param p1: The origin point of the line.
+        :param p2: The end point of the line.
+        :return: A point on the line between p1 and p2.
         """
-        if distance(p1, p2) < self.get_max_branch_distance():
+        if distance(p1, p2) < self.max_distance:
             return p2
         else:
-            # Calculate a new point on the line using vector calculus
-            v = (p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2])
-            l = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-            v = (v[0]/l, v[1]/l, v[2]/l)
-            x = p1[0] + random.uniform(0.0, self.get_max_branch_distance()) * v[0]
-            y = p1[1] + random.uniform(0.0, self.get_max_branch_distance()) * v[1]
-            z = p1[2] + random.uniform(0.0, self.get_max_branch_distance()) * v[2]
-            return x, y, z
+            return self.point_on_line(p1, p2,
+                                      random.uniform(0.0, self.max_distance),
+                                      random.uniform(0.0, self.max_distance),
+                                      random.uniform(0.0, self.max_distance))
 
-    def generate_neighbors(self, pos, sub, level, above, above2, sub2):
+    def point_on_line(self, p1, p2, dx=1, dy=1, dz=1):
         """
-        Generates valid neighbors from a position.
-        :param sub: The grid one unit below the agent.
-        :param level: The grid on the same level as the agent.
-        :param above: The grid one unit above the agent.
-        :param above2: The grid two units above the agent.
-        :param sub2: The grid two units below the agent.
-        :return: A list of valid neighbors for the exploration algorithm.
+        Determines a point on a line in 3D.
+        :param p1: The origin point of the line.
+        :param p2: The end point of the line.
+        :param dx: Distance to move in terms of dx.
+        :param dy: Distance to move in terms of dy.
+        :param dz: Distance to move in terms of dz.
+        :return: A point on the line between p1 and p2.
         """
-        neighbors = []
-        x, y, z = pos[0], pos[1], pos[2]
+        v = p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]
+        l = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+        uv = v[0] / l, v[1] / l, v[2] / l
+        x = p1[0] + dx * uv[0]
+        y = p1[1] + dy * uv[1]
+        z = p1[2] + dz * uv[2]
+        return x, y, z
 
-        for i in range(9):
-            if i == PLAYER:
-                continue
-            # Check for a valid block
-            if sub[i] != BLOCK_AIR and sub[i] not in BLOCK_HAZARDS:
-                # Agent can walk here
-                if level[i] == BLOCK_AIR and above[i] == BLOCK_AIR:
-                    neighbors.append((x + POS_DIFFERENTIALS[i][0], y, z + POS_DIFFERENTIALS[i][1]))
-                elif level[i] != BLOCK_AIR and level[i] not in BLOCK_HAZARDS:
-                    # Agent can climb here
-                    if above[i] == BLOCK_AIR and above2[i] == BLOCK_AIR:
-                        neighbors.append((x + POS_DIFFERENTIALS[i][0], y + 1, z + POS_DIFFERENTIALS[i][1]))
-            elif sub[i] == BLOCK_AIR:
-                # Agent can drop here
-                if sub2[i] != BLOCK_AIR and sub2[i] not in BLOCK_HAZARDS:
-                    neighbors.append((x + POS_DIFFERENTIALS[i][0], y - 1, z + POS_DIFFERENTIALS[i][1]))
-
-
-        return neighbors
+    def random(self, xdim, ydim, zdim):
+        """
+        Gets a random point in the search region.
+        :param xdim: The x-dimensions to search within.
+        :param ydim: The y-dimensions to search within.
+        :param zdim: The z-dimensions to search within.
+        :return: A random point in the specified search space.
+        """
+        return (random.uniform(min(xdim), max(xdim)),
+                random.uniform(min(ydim), max(ydim)),
+                random.uniform(min(zdim), max(zdim)))
 
     def sample(self, p1, p2):
         """
-        Samples a point in the search space.
-        :param p1: The point sampling from.
-        :param p2: A randomly generated point.
-        :return: A suitable sample point.
+        Samples the search region for a new point in the tree.
+        :param p1: The parent point.
+        :param p2: A randomly chosen point from the search space.
+        :return: A sampled point from the search space.
         """
         p = random.random()
-        # Note: Reversing the comparison operator below creates a heavy bias towards the goal
         if p >= 1-self.get_goal_probability():
-            point = self.line_to(p1, self.get_goal())
-            while self.is_blocked(point) or self.is_hazard(point):
-                point = self.line_to(p1, self.get_goal())
-            return point
+            return self.line_to(p1, self.get_goal())
         elif p <= 1-self.get_line_probability():
-            point = self.line_to(p1, p2)
-            while self.is_blocked(point) or self.is_hazard(point):
-                point = self.line_to(p1, p2)
-            return point
-        elif (p <= (1-self.get_line_probability()/self.get_ellipsoid_uniform_modifier())
-              or not self.line_of_sight(p1, p2)):
-            point = self.uniform()
-            while self.is_blocked(point) or self.is_hazard(point):
-                point = self.uniform()
-            return point
+            return self.line_to(p1, p2)
+        elif p <= (1-self.get_line_probability()/self.get_randomizer()):
+            return self.uniform()
         else:
-            # TODO: Create a probability to bias towards the goal
             x, y, z = self.ellipsoid()
-            while (not self.in_bounds(p1[0] + x, p1[1] + y, p1[2] + z) or
-                       self.is_blocked(p1[0] + x, p1[1] + y, p1[2] + z) or
-                       self.is_hazard(p1[0] + x, p1[1] + y, p1[2] + z)):
-                x, y, z = self.ellipsoid()
             return p1[0] + x, p1[1] + y, p1[2] + z
 
     def uniform(self):
         """
-        Samples from the entire search space.
-        :return: A sample coordinate that falls within the sample search space.
+        Returns a uniformly sampled point in the search region.
+        :return: A uniformly sampled point from the search region.
         """
-        return random_point(self.get_xmin(), self.get_xmax(),
-                            self.get_ymin(), self.get_ymax(),
-                            self.get_zmin(), self.get_zmax())
+        return self.random(self.get_xdims(), self.get_ydims(), self.get_zdims())
 
-############################
-#  MAIN METHODS
-############################
+#######################################
+# TESTING METHODS
+#######################################
 
-
-def malmo_agent_test():
-    """
-    Runs Malmo missions. Note: A dormant Malmo server must be running in order for this method to run properly.
-    :return: N/A
-    """
-
-    #######################
-    # BEGIN INITIALIZATION
-    #######################
-
-    for i in range(len(MISSIONS)):
-        agent_host = MalmoPython.AgentHost()
-
-        try:
-            agent_host.parse(sys.argv)
-        except RuntimeError as e:
-            print 'ERROR: ', e
-            print agent_host.getUsage()
-            exit(1)
-        if agent_host.receivedArgument("help"):
-            print agent_host.getUsage()
-            exit(0)
-
-        my_mission = None
-        # Load in the mission:
-        with open(MISSIONS[i], 'r') as f:
-            print "Loading mission from ", MISSIONS[i]
-            my_mission = MalmoPython.MissionSpec(f.read(), True)
-        my_mission_record = MalmoPython.MissionRecordSpec()
-
-        # Attempt to start a mission:
-        max_retries = 3
-        for retry in range(max_retries):
-            try:
-                agent_host.startMission(my_mission, my_mission_record)
-                break
-            except RuntimeError as e:
-                if retry == max_retries - 1:
-                    print "Error starting mission: ", e
-                    exit(1)
-                else:
-                    time.sleep(2)
-
-        # Loop until mission starts:
-        print "Waiting for the mission to start ",
-        world_state = agent_host.getWorldState()
-        while not world_state.has_mission_begun:
-            sys.stdout.write(".")
-            time.sleep(1)
-            world_state = agent_host.getWorldState()
-            for error in world_state.errors:
-                print "Error: ", error.text
-
-        print
-        print "Mission running ",
-
-        #######################
-        # END INITIALIZATION
-        #######################
-
-        # Insert agent code here.
-        agent = RRTAgent(start=START_POS, goal=GOAL_POS[i])
-
-        # Create a bfs agent to explore the environment
-        openlist = Queue()
-        openlist.put_nowait(RRTNode(agent.get_start()))
-        closedlist = set()
-        path = None
-        stage = 0
-
-        while world_state.is_mission_running:
-            sys.stdout.write(".")
-            world_state = agent_host.getWorldState()
-            for error in world_state.errors:
-                print "Error:",error.text
-            if stage == 0 and world_state.number_of_observations_since_last_state > 0:
-                msg = world_state.observations[-1].text
-                ob = json.loads(msg)
-                current = openlist.get_nowait()
-                if current.get_position() not in closedlist:
-                    closedlist.add(current.get_position())
-                    for neighbor in agent.generate_neighbors(pos=(ob.get(u'XPos'), ob.get(u'YPos'), ob.get(u'ZPos')),
-                                                         above=ob.get(u'Roof'),
-                                                         above2=ob.get(u'SuperRoof'),
-                                                         sub=ob.get(u'Floor'),
-                                                         sub2=ob.get(u'SubFloor'),
-                                                         level=ob.get(u'Level')):
-                        print neighbor
-                        openlist.put_nowait(RRTNode(neighbor, current))
-                    agent_host.sendCommand("tp {0} {1} {2}".format(current.get_position()[0],
-                                                                   current.get_position()[1],
-                                                                   current.get_position()[2]))
-                    time.sleep(.3)
-                if not openlist:
-                    agent_host.sendCommand("tp {0} {1} {2}".format(agent.get_start()[0],
-                                                                   agent.get_start()[1],
-                                                                   agent.get_start()[2]))
-                    stage = 1
-            elif stage == 1:
-                path = agent.generate_path()
-                stage = 2
-            elif stage == 2:
-                while path:
-                    current = path.pop()
-                agent_host.sendCommand("tp {0} {1} {2}".format(current.get_position()[0],
-                                                                   current.get_position()[1],
-                                                                   current.get_position()[2]))
-                time.sleep(.3)
-
-def random_world_test():
-    """
-    Runs a randomized test of RRT.
-    :return: N/A
-    """
-    agent = RRTAgent()
-    for i in range(10):
-        x, y, z = agent.uniform()
-        x = math.floor(x)
-        y = math.floor(y)
-        z = math.floor(z)
-        agent.add_obstacle((x, y, z))
-    print agent.generate_path()
+def rrt_test():
+    agent = RealTimeRapidlyExploringTreeAgent()
+    print agent.explore()
 
 if __name__ == '__main__':
-    random_world_test()
+    rrt_test()
