@@ -71,7 +71,7 @@ def read_in_txt(txt):
     :param txt: The name of the mission descriptor file.
     :return: A dictionary containing all the obstacle, hazard, and air information about a mission.
     """
-    objects = {constants.obstacle: [], constants.hazard: []}
+    objects = {constants.obstacle: set(), constants.hazard: set()}
     input_file = open(txt, 'r')
     input_amt = 0
     btype = None
@@ -97,9 +97,9 @@ def read_in_txt(txt):
                     for dz in range(zu-zl+1):
                         point = xl+dx, yl+dy, zl+dz
                         if btype == constants.obstacle:
-                            objects[constants.obstacle].append(point)
+                            objects[constants.obstacle].add(point)
                         elif btype == constants.hazard:
-                            objects[constants.hazard].append(point)
+                            objects[constants.hazard].add(point)
                         elif btype == constants.air:
                             if point in objects[constants.obstacle]:
                                 objects[constants.obstacle].remove(point)
@@ -114,7 +114,7 @@ def read_in_txt(txt):
 #######################################
 
 
-class RTRRT_Node:
+class RTRRT_Node(object):
 
     #######################################
     # CONSTRUCTOR
@@ -147,7 +147,7 @@ class RTRRT_Node:
         self.parent = parent
 
 
-class RTRRT_Agent:
+class RTRRT_Agent(object):
 
     #######################################
     # CONSTRUCTOR
@@ -523,6 +523,8 @@ def malmo_test():
             for level, space in agent.get_walkable().iteritems():
                 print level, space
             print
+
+        continue
 
         # Generate a path
         path = agent.explore()
