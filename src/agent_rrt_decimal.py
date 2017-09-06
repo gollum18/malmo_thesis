@@ -345,7 +345,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         if p[1] in self.hazards.keys():
             for hazard in self.hazards[p[1]]:
                 if (hazard[0] <= p[0] <= hazard[0] + self.haz_dims[0] and
-                        hazard[1] <= p[1] <= hazard[1] + self.haz_dims[1]):
+                        hazard[1] <= p[2] <= hazard[1] + self.haz_dims[2]):
                     return True
         return False
 
@@ -358,7 +358,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         if p[1] in self.obstacles.keys():
             for obstacle in self.obstacles[p[1]]:
                 if (obstacle[0] <= p[0] <= obstacle[0] + self.obs_dims[0] and
-                        obstacle[1] <= p[1] <= obstacle[1] + self.obs_dims[1]):
+                        obstacle[1] <= p[2] <= obstacle[1] + self.obs_dims[2]):
                     return True
         return False
 
@@ -551,4 +551,4 @@ def rrt_test():
     print agent.explore()
 
 if __name__ == '__main__':
-    descriptor_test()
+    malmo_test()

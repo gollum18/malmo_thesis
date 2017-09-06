@@ -1,3 +1,5 @@
+from operator import and_
+
 from agent_rrt_decimal import *
 
 class RealTimeRapidlyExploringTreeAgentWhole(RealTimeRapidlyExploringTreeAgentDecimal):
@@ -62,8 +64,39 @@ class RealTimeRapidlyExploringTreeAgentWhole(RealTimeRapidlyExploringTreeAgentDe
                         if self.in_bounds(p) and not self.is_blocked(p):
                             q = node.get_position()[0] + dx, node.get_position()[1] + dy - 1, node.get_position()[2] + dz
                             if self.in_bounds(q) and self.is_obstacle(q):
-                                neighbors.append(RealTimeRapidlyExploringTreeNode(p, node))
+                                neighbors.append(p)
             return neighbors
+
+        def occupied(pos):
+            for node in nodes:
+                if node.get_position() == pos:
+                    return True
+            return False
+
+        nc = self.get_max_nodes()
+        nodes = [RealTimeRapidlyExploringTreeNode(self.get_start())]
+        while nc > 0:
+            n = random.choice(nodes)
+            s = generate_neighbors(n)
+            if s:
+                p = random.choice(s)
+                while s:
+                    if not occupied(p):
+                        nodes.append(RealTimeRapidlyExploringTreeNode(p, n))
+                        nc -= 1
+                        break
+                    s.remove(p)
+                    if s:
+                        p = random.choice(s)
+                if self.is_goal(nodes[-1].get_position()):
+                    path = []
+                    current = nodes[-1]
+                    while current.get_parent():
+                        path.append(current.get_position())
+                        current = current.get_parent()
+                    return path
+            print nodes
+        return []
 
 if __name__ == '__main__':
     paths = []
