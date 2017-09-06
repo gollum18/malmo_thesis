@@ -1,45 +1,9 @@
 import MalmoPython
+import constants
 import math
 import random
 import time
 import sys
-
-#######################################
-# CONSTANTS
-#######################################
-
-# Describes the missions boundaries for the agent
-_mission_txt = (
-    # Walk to goal mission
-    './missions/pp_maze_one.txt',
-    # Climb to goal mission
-    './missions/pp_maze_two.txt',
-    # Drop to goal mission
-    './missions/pp_maze_three.txt',
-    # Climb the big central pillar
-    './missions/pp_maze_four.txt')
-
-# Describes the mission itself in a way Malmo can interpret
-_mission_xml = (
-    # Walk to goal mission
-    './missions/pp_maze_one.xml',
-    # Climb to goal mission
-    './missions/pp_maze_two.xml',
-    # Drop to goal mission
-    './missions/pp_maze_three.xml',
-    # Climb the big central pillar
-    './missions/pp_maze_four.xml'
-)
-
-_lower_dimensions = ((-25, 55, -25), (-25, 55, -25), (-25, 54, -25), (-25, 55, -25))
-_upper_dimensions = ((25, 70, 25), (25, 70, 25), (25, 70, 25), (25, 70, 25))
-
-_start = (0.5, 56, 24.5)
-_goal = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 55, -24.5], [0.5, 61, 0.5], [0.5, 56, -28.5])
-
-_obstacle = 'obs'
-_hazard = 'haz'
-_air = 'air'
 
 #######################################
 # UTILITY FUNCTIONS
@@ -60,22 +24,22 @@ def read_in_txt(txt):
     :param txt: The name of the mission descriptor file.
     :return: A dictionary containing all the obstacle, hazard, and air information about a mission.
     """
-    objects = {_obstacle: [], _hazard: []}
+    objects = {constants.obstacle: [], constants.hazard: []}
     input_file = open(txt, 'r')
     input_amt = 0
     btype=None
     for line in input_file.readlines():
-        if _obstacle in line:
+        if constants.obstacle in line:
             input_amt = int(line.split()[1])
-            btype = _obstacle
+            btype = constants.obstacle
             continue
-        elif _hazard in line:
+        elif constants.hazard in line:
             input_amt = int(line.split()[1])
-            btype = _hazard
+            btype = constants.hazard
             continue
-        elif _air in line:
+        elif constants.air in line:
             input_amt = int(line.split()[1])
-            btype = _air
+            btype = constants.air
             continue
         if input_amt > 0:
             parts = line.split()
@@ -85,15 +49,15 @@ def read_in_txt(txt):
                 for dy in range(yu-yl+1):
                     for dz in range(zu-zl+1):
                         point = xl+dx, yl+dy, zl+dz
-                        if btype == _obstacle:
-                            objects[_obstacle].append(point)
-                        elif btype == _hazard:
-                            objects[_hazard].append(point)
-                        elif btype == _air:
-                            if point in objects[_obstacle]:
-                                objects[_obstacle].remove(point)
-                            if point in objects[_hazard]:
-                                objects[_hazard].remove(point)
+                        if btype == constants.obstacle:
+                            objects[constants.obstacle].append(point)
+                        elif btype == constants.hazard:
+                            objects[constants.hazard].append(point)
+                        elif btype == constants.air:
+                            if point in objects[constants.obstacle]:
+                                objects[constants.obstacle].remove(point)
+                            if point in objects[constants.hazard]:
+                                objects[constants.hazard].remove(point)
             input_amt -= 1
     input_file.close()
     return objects
@@ -116,6 +80,15 @@ class RealTimeRapidlyExploringTreeNode:
     # ACCESSORS/MUTATORS
     #######################################
 
+    def __eq__(self, other):
+        return self.position == other.position
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.position)
+
     def get_position(self):
         return self.position
 
@@ -125,7 +98,7 @@ class RealTimeRapidlyExploringTreeNode:
     def set_parent(self, parent):
         self.parent = parent
 
-class RealTimeRapidlyExploringTreeAgent:
+class RealTimeRapidlyExploringTreeAgentDecimal:
 
     #######################################
     # CONSTRUCTOR
@@ -261,7 +234,7 @@ class RealTimeRapidlyExploringTreeAgent:
         :return: N/A
         """
         if p[1] not in self.hazards.keys():
-            self.hazards[p[1]] = list((p[0], p[2]))
+            self.hazards[p[1]] = [(p[0], p[2])]
         else:
             self.hazards[p[1]].append((p[0], p[2]))
 
@@ -272,7 +245,7 @@ class RealTimeRapidlyExploringTreeAgent:
         :return: N/A
         """
         if p[1] not in self.obstacles.keys():
-            self.obstacles[p[1]] = list((p[0], p[2]))
+            self.obstacles[p[1]] = [(p[0], p[2])]
         else:
             self.obstacles[p[1]].append((p[0], p[2]))
 
@@ -346,7 +319,7 @@ class RealTimeRapidlyExploringTreeAgent:
         :param p: The point to check.
         :return: True if the point is an obstacle or hazard, False otherwise.
         """
-        if self.is_blocked(p) or self.is_hazard(p):
+        if self.is_obstacle(p) or self.is_hazard(p):
             return True
         return False
 
@@ -369,10 +342,11 @@ class RealTimeRapidlyExploringTreeAgent:
         :param p: The point to check.
         :return: True if the point is a hazard, False otherwise.
         """
-        for hazard in self.hazards[p[1]]:
-            if (hazard[0] <= p[0] <= hazard[0] + self.haz_dims[0] and
-                    hazard[1] <= p[1] <= hazard[1] + self.haz_dims[1]):
-                return True
+        if p[1] in self.hazards.keys():
+            for hazard in self.hazards[p[1]]:
+                if (hazard[0] <= p[0] <= hazard[0] + self.haz_dims[0] and
+                        hazard[1] <= p[1] <= hazard[1] + self.haz_dims[1]):
+                    return True
         return False
 
     def is_obstacle(self, p):
@@ -381,10 +355,11 @@ class RealTimeRapidlyExploringTreeAgent:
         :param p: The point to check.
         :return: True if the point is an obstacle, False otherwise.
         """
-        for obstacle in self.obstacles[p[1]]:
-            if (obstacle[0] <= p[0] <= obstacle[0] + self.obs_dims[0] and
-                    obstacle[1] <= p[1] <= obstacle[1] + self.obs_dims[1]):
-                return True
+        if p[1] in self.obstacles.keys():
+            for obstacle in self.obstacles[p[1]]:
+                if (obstacle[0] <= p[0] <= obstacle[0] + self.obs_dims[0] and
+                        obstacle[1] <= p[1] <= obstacle[1] + self.obs_dims[1]):
+                    return True
         return False
 
     def line_of_sight(self, p1, p2):
@@ -476,20 +451,38 @@ class RealTimeRapidlyExploringTreeAgent:
 # TESTING METHODS
 #######################################
 
-def malmo_test():
-    for i in range(len(_mission_xml)):
-        # Create an agent and generate a path
-
-        agent = RealTimeRapidlyExploringTreeAgent(start=_start,
-                                                  goal=_goal[i],
-                                                  xdims=(_lower_dimensions[i][0], _upper_dimensions[i][0]),
-                                                  ydims=(_lower_dimensions[i][1], _upper_dimensions[i][1]),
-                                                  zdims=(_lower_dimensions[i][2], _upper_dimensions[i][2]))
-        for key, value in read_in_txt(_mission_txt[i]).iteritems():
-            if key == _obstacle:
+def descriptor_test():
+    paths = []
+    for i in range(len(constants.mission_txt)):
+        agent = RealTimeRapidlyExploringTreeAgentDecimal(start=constants.start,
+                                                  goal=constants.goal[i],
+                                                  xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
+                                                  ydims=(constants.lower_dimensions[i][1], constants.upper_dimensions[i][1]),
+                                                  zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]))
+        for key, value in read_in_txt(constants.mission_txt[i]).iteritems():
+            if key == constants.obstacle:
                 for obstacle in value:
                     agent.add_obstacle(obstacle)
-            elif key == _hazard:
+            elif key == constants.hazard:
+                for hazard in value:
+                    agent.add_obstacle(hazard)
+        paths.append(agent.explore())
+    for path in paths:
+        print path
+
+def malmo_test():
+    for i in range(len(constants.mission_xml)):
+        # Create an agent and generate a path
+        agent = RealTimeRapidlyExploringTreeAgentDecimal(start=constants.start,
+                                                  goal=constants.goal[i],
+                                                  xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
+                                                  ydims=(constants.lower_dimensions[i][1], constants.upper_dimensions[i][1]),
+                                                  zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]))
+        for key, value in read_in_txt(constants.mission_txt[i]).iteritems():
+            if key == constants.obstacle:
+                for obstacle in value:
+                    agent.add_obstacle(obstacle)
+            elif key == constants.hazard:
                 for hazard in value:
                     agent.add_obstacle(hazard)
 
@@ -509,8 +502,8 @@ def malmo_test():
 
         my_mission = None
         # Load in the mission
-        with open(_mission_xml[i], 'r') as f:
-            print "Loading mission from {0}".format(_mission_xml[i])
+        with open(constants.mission_xml[i], 'r') as f:
+            print "Loading mission from {0}".format(constants.mission_xml[i])
             my_mission = MalmoPython.MissionSpec(f.read(), True)
         my_mission_record = MalmoPython.MissionRecordSpec()
 
@@ -550,7 +543,7 @@ def malmo_test():
             time.sleep(.3)
 
 def rrt_test():
-    agent = RealTimeRapidlyExploringTreeAgent()
+    agent = RealTimeRapidlyExploringTreeAgentDecimal()
     for i in range(random.randint(1, 20)):
         agent.add_hazard(agent.uniform())
     for i in range(random.randint(1, 20)):
@@ -558,4 +551,4 @@ def rrt_test():
     print agent.explore()
 
 if __name__ == '__main__':
-    malmo_test()
+    descriptor_test()
