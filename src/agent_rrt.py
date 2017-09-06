@@ -5,9 +5,23 @@ import random
 import time
 import sys
 
+
+#######################################
+# FILE SPECIFIC PARAMETERS
+#######################################
+_debug = True
+
 #######################################
 # UTILITY FUNCTIONS
 #######################################
+
+
+def add_to_dictionary(dictionary, p):
+    if p[1] not in dictionary.keys():
+        dictionary[p[1]] = [(p[0], p[2])]
+    else:
+        dictionary[p[1]].append((p[0], p[2]))
+
 
 def distance(p1, p2):
     """
@@ -18,6 +32,39 @@ def distance(p1, p2):
     """
     return math.sqrt((p2[0]-p1[0])*(p2[0]-p1[0])+(p2[1]-p1[1])*(p2[1]-p1[1])+(p2[2]-p1[2])*(p2[2]-p1[2]))
 
+
+def point_on_line(p1, p2, dx=1, dy=1, dz=1):
+    """
+    Determines a point on a line in 3D.
+    :param p1: The origin point of the line.
+    :param p2: The end point of the line.
+    :param dx: Distance to move in terms of dx.
+    :param dy: Distance to move in terms of dy.
+    :param dz: Distance to move in terms of dz.
+    :return: A point on the line between p1 and p2.
+    """
+    v = p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]
+    l = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+    uv = v[0] / l, v[1] / l, v[2] / l
+    x = p1[0] + dx * uv[0]
+    y = p1[1] + dy * uv[1]
+    z = p1[2] + dz * uv[2]
+    return x, y, z
+
+
+def random_point(xdim, ydim, zdim):
+    """
+    Gets a random point in the search region.
+    :param xdim: The x-dimensions to search within.
+    :param ydim: The y-dimensions to search within.
+    :param zdim: The z-dimensions to search within.
+    :return: A random point in the specified search space.
+    """
+    return (random.uniform(min(xdim), max(xdim)),
+            random.uniform(min(ydim), max(ydim)),
+            random.uniform(min(zdim), max(zdim)))
+
+
 def read_in_txt(txt):
     """
     Reads in information on obstacles, hazards, and air from the missions descriptor text file.
@@ -27,7 +74,7 @@ def read_in_txt(txt):
     objects = {constants.obstacle: [], constants.hazard: []}
     input_file = open(txt, 'r')
     input_amt = 0
-    btype=None
+    btype = None
     for line in input_file.readlines():
         if constants.obstacle in line:
             input_amt = int(line.split()[1])
@@ -66,7 +113,8 @@ def read_in_txt(txt):
 # CLASSES
 #######################################
 
-class RealTimeRapidlyExploringTreeNode:
+
+class RTRRT_Node:
 
     #######################################
     # CONSTRUCTOR
@@ -98,7 +146,8 @@ class RealTimeRapidlyExploringTreeNode:
     def set_parent(self, parent):
         self.parent = parent
 
-class RealTimeRapidlyExploringTreeAgentDecimal:
+
+class RTRRT_Agent:
 
     #######################################
     # CONSTRUCTOR
@@ -143,6 +192,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         self.movement_distance = movement_distance
         self.obstacles = {}
         self.hazards = {}
+        self.walkable = {}
 
     #######################################
     # ACCESSORS/MUTATORS
@@ -223,6 +273,9 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
     def get_hazards(self):
         return self.hazards
 
+    def get_walkable(self):
+        return self.walkable
+
     #######################################
     # METHODS
     #######################################
@@ -233,10 +286,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         :param p: The bottom, lower-left point of the hazard.
         :return: N/A
         """
-        if p[1] not in self.hazards.keys():
-            self.hazards[p[1]] = [(p[0], p[2])]
-        else:
-            self.hazards[p[1]].append((p[0], p[2]))
+        add_to_dictionary(self.hazards, p)
 
     def add_obstacle(self, p):
         """
@@ -244,10 +294,10 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         :param p: The bottom, lower-left point of the obstacle.
         :return: N/A
         """
-        if p[1] not in self.obstacles.keys():
-            self.obstacles[p[1]] = [(p[0], p[2])]
-        else:
-            self.obstacles[p[1]].append((p[0], p[2]))
+        add_to_dictionary(self.obstacles, p)
+
+    def add_walkable(self, p):
+        add_to_dictionary(self.walkable, p)
 
     def ellipsoid(self):
         """
@@ -283,7 +333,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
                     best_distance = v
             return best_node
 
-        nodes = [RealTimeRapidlyExploringTreeNode(self.get_start())]
+        nodes = [RTRRT_Node(self.get_start())]
 
         for i in range(self.get_max_nodes()):
             rand = self.uniform()
@@ -291,7 +341,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
             for p in nodes:
                 if distance(p.get_position(), rand) < distance(nn.get_position(), rand):
                     nn = p
-            nodes.append(RealTimeRapidlyExploringTreeNode(self.sample(nn.get_position(), rand), nn))
+            nodes.append(RTRRT_Node(self.sample(nn.get_position(), rand), nn))
             if self.is_goal(nodes[-1].get_position()):
                 path = []
                 current = nodes[-1]
@@ -344,8 +394,8 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         """
         if p[1] in self.hazards.keys():
             for hazard in self.hazards[p[1]]:
-                if (hazard[0] <= p[0] <= hazard[0] + self.haz_dims[0] and
-                        hazard[1] <= p[2] <= hazard[1] + self.haz_dims[2]):
+                if (hazard[0] <= p[0] < hazard[0] + self.haz_dims[0] and
+                        hazard[1] <= p[2] < hazard[1] + self.haz_dims[2]):
                     return True
         return False
 
@@ -357,8 +407,8 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         """
         if p[1] in self.obstacles.keys():
             for obstacle in self.obstacles[p[1]]:
-                if (obstacle[0] <= p[0] <= obstacle[0] + self.obs_dims[0] and
-                        obstacle[1] <= p[2] <= obstacle[1] + self.obs_dims[2]):
+                if (obstacle[0] <= p[0] < obstacle[0] + self.obs_dims[0] and
+                        obstacle[1] <= p[2] < obstacle[1] + self.obs_dims[2]):
                     return True
         return False
 
@@ -372,7 +422,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         x, y, z = p1
         # Incrementally march p1 to p2 by a 1 unit distance each time, checking for obstacles as we go.
         while (x, y, z) != p2:
-            x, y, z = self.point_on_line(p1, p2)
+            x, y, z = point_on_line(p1, p2)
             if self.is_blocked((x, y, z)):
                 return False
         return True
@@ -387,40 +437,10 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         if distance(p1, p2) < self.max_distance:
             return p2
         else:
-            return self.point_on_line(p1, p2,
-                                      random.uniform(0.0, self.max_distance),
-                                      random.uniform(0.0, self.max_distance),
-                                      random.uniform(0.0, self.max_distance))
-
-    def point_on_line(self, p1, p2, dx=1, dy=1, dz=1):
-        """
-        Determines a point on a line in 3D.
-        :param p1: The origin point of the line.
-        :param p2: The end point of the line.
-        :param dx: Distance to move in terms of dx.
-        :param dy: Distance to move in terms of dy.
-        :param dz: Distance to move in terms of dz.
-        :return: A point on the line between p1 and p2.
-        """
-        v = p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]
-        l = math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
-        uv = v[0] / l, v[1] / l, v[2] / l
-        x = p1[0] + dx * uv[0]
-        y = p1[1] + dy * uv[1]
-        z = p1[2] + dz * uv[2]
-        return x, y, z
-
-    def random(self, xdim, ydim, zdim):
-        """
-        Gets a random point in the search region.
-        :param xdim: The x-dimensions to search within.
-        :param ydim: The y-dimensions to search within.
-        :param zdim: The z-dimensions to search within.
-        :return: A random point in the specified search space.
-        """
-        return (random.uniform(min(xdim), max(xdim)),
-                random.uniform(min(ydim), max(ydim)),
-                random.uniform(min(zdim), max(zdim)))
+            return point_on_line(p1, p2,
+                                 random.uniform(0.0, self.max_distance),
+                                 random.uniform(0.0, self.max_distance),
+                                 random.uniform(0.0, self.max_distance))
 
     def sample(self, p1, p2):
         """
@@ -429,6 +449,7 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         :param p2: A randomly chosen point from the search space.
         :return: A sampled point from the search space.
         """
+        # TODO: This should sample from walkable space to be meaningful
         p = random.random()
         if p >= 1-self.get_goal_probability():
             return self.line_to(p1, self.get_goal())
@@ -445,20 +466,21 @@ class RealTimeRapidlyExploringTreeAgentDecimal:
         Returns a uniformly sampled point in the search region.
         :return: A uniformly sampled point from the search region.
         """
-        return self.random(self.get_xdims(), self.get_ydims(), self.get_zdims())
+        return random_point(self.get_xdims(), self.get_ydims(), self.get_zdims())
 
 #######################################
 # TESTING METHODS
 #######################################
 
+
 def descriptor_test():
     paths = []
     for i in range(len(constants.mission_txt)):
-        agent = RealTimeRapidlyExploringTreeAgentDecimal(start=constants.start,
-                                                  goal=constants.goal[i],
-                                                  xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
-                                                  ydims=(constants.lower_dimensions[i][1], constants.upper_dimensions[i][1]),
-                                                  zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]))
+        agent = RTRRT_Agent(start=constants.start,
+                            goal=constants.goal[i],
+                            xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
+                            ydims=(constants.lower_dimensions[i][1], constants.upper_dimensions[i][1]),
+                            zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]))
         for key, value in read_in_txt(constants.mission_txt[i]).iteritems():
             if key == constants.obstacle:
                 for obstacle in value:
@@ -470,14 +492,17 @@ def descriptor_test():
     for path in paths:
         print path
 
+
 def malmo_test():
     for i in range(len(constants.mission_xml)):
         # Create an agent and generate a path
-        agent = RealTimeRapidlyExploringTreeAgentDecimal(start=constants.start,
-                                                  goal=constants.goal[i],
-                                                  xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
-                                                  ydims=(constants.lower_dimensions[i][1], constants.upper_dimensions[i][1]),
-                                                  zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]))
+        agent = RTRRT_Agent(start=constants.start,
+                            goal=constants.goal[i],
+                            xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
+                            ydims=(constants.lower_dimensions[i][1], constants.upper_dimensions[i][1]),
+                            zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]))
+
+        # Read in the obstacles/hazards from file and add them to the agents world model
         for key, value in read_in_txt(constants.mission_txt[i]).iteritems():
             if key == constants.obstacle:
                 for obstacle in value:
@@ -486,8 +511,23 @@ def malmo_test():
                 for hazard in value:
                     agent.add_obstacle(hazard)
 
+        # Add in walkable space
+        for level, obstacles in agent.get_obstacles().iteritems():
+            for obstacle in obstacles:
+                x, z = obstacle
+                p = x, level + 1, z
+                if agent.in_bounds(p) and not agent.is_blocked(p) and not agent.is_blocked((x, level + 2, z)):
+                    agent.add_walkable(p)
+
+        if _debug:
+            for level, space in agent.get_walkable().iteritems():
+                print level, space
+            print
+
+        # Generate a path
         path = agent.explore()
 
+        # Setup a malmo client
         agent_host = MalmoPython.AgentHost()
 
         try:
@@ -534,16 +574,19 @@ def malmo_test():
         print "Mission running ",
 
         # Needed to prevent skipped commands
-        time.sleep(1.5)
+        time.sleep(5)
 
         while world_state.is_mission_running:
+            # Guide the agent along the path
             world_state = agent_host.getWorldState()
-            loc = path.pop()
-            agent_host.sendCommand("tp {0} {1} {2}".format(loc[0], loc[1], loc[2]))
+            if path:
+                loc = path.pop()
+                agent_host.sendCommand("tp {0} {1} {2}".format(loc[0], loc[1], loc[2]))
             time.sleep(.3)
 
+
 def rrt_test():
-    agent = RealTimeRapidlyExploringTreeAgentDecimal()
+    agent = RTRRT_Agent()
     for i in range(random.randint(1, 20)):
         agent.add_hazard(agent.uniform())
     for i in range(random.randint(1, 20)):
