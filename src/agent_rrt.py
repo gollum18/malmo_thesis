@@ -494,6 +494,26 @@ class RTRRT_Agent(object):
         """
         return random_point(self.get_xdims(), self.get_ydims(), self.get_zdims())
 
+    def walkable_space(self):
+        """
+        Creates a set containing walkable space from the current y level the agent is sitting at.
+        :return: A set containing all the walkable blocks the agent can reach either from jumping or falling 1 unit.
+        """
+        def walkable(level):
+            return [(pos[0], level, pos[1]) for pos in self.walkable[level]] if level in self.walkable.keys() else []
+
+        space = set()
+        y = self.position[1]
+        if min(self.ydims) < y < max(self.ydims):
+            space.update(walkable(y - 1))
+            space.update(walkable(y + 1))
+        elif y == min(self.ydims):
+            space.update(walkable(y + 1))
+        elif y == max(self.ydims):
+            space.update(walkable(y - 1))
+        space.update(walkable(y))
+        return space
+
 #######################################
 # TESTING METHODS
 #######################################
@@ -547,9 +567,7 @@ def malmo_test():
 
         if _debug:
             print constants.mission_txt[i]
-            for level, space in agent.get_walkable().iteritems():
-                print level, space
-            print
+            print agent.walkable_space()
 
         continue
 
