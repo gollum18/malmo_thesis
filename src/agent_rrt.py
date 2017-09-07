@@ -5,6 +5,8 @@ import random
 import time
 import sys
 
+# TODO: Come up with a way to merge adjacent objects/hazards/walkable space into rectangular chunks
+# This will reduce overhead in checking for object/hazard collision
 
 #######################################
 # FILE SPECIFIC PARAMETERS
@@ -114,6 +116,18 @@ def read_in_txt(txt):
 #######################################
 
 
+class Timer(object):
+
+    def __init__(self):
+        self.time = time.time()
+
+    def elapsed(self):
+        return time.time() - self.time
+
+    def reset(self):
+        self.time = time.time()
+
+
 class RTRRT_Node(object):
 
     #######################################
@@ -174,9 +188,11 @@ class RTRRT_Agent(object):
                  hazx=1,
                  hazy=1,
                  hazz=1,
-                 movement_distance=1):
+                 movement_distance=1,
+                 move_time=2.5):
         self.start = start
         self.goal = goal
+        self.position = self.start
         self.xdims = xdims
         self.ydims = ydims
         self.zdims = zdims
@@ -193,6 +209,8 @@ class RTRRT_Agent(object):
         self.obstacles = {}
         self.hazards = {}
         self.walkable = {}
+        self.move_time = move_time
+        self.move_timer = Timer()
 
     #######################################
     # ACCESSORS/MUTATORS
@@ -412,6 +430,14 @@ class RTRRT_Agent(object):
                     return True
         return False
 
+    def is_walkable(self, p):
+        if p[1] in self.walkable.keys():
+            for walkable in self.walkable[p[1]]:
+                if (walkable[0] <= p[0] < walkable[0] + self.obs_dims[0] and
+                        walkable[1] <= p[2] < walkable[1] + self.obs_dims[2]):
+                    return True
+        return False
+
     def line_of_sight(self, p1, p2):
         """
         Determines line of sight between p1 and p2.
@@ -520,6 +546,7 @@ def malmo_test():
                     agent.add_walkable(p)
 
         if _debug:
+            print constants.mission_txt[i]
             for level, space in agent.get_walkable().iteritems():
                 print level, space
             print
