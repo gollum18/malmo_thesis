@@ -4,10 +4,6 @@ import math
 import random
 import time
 import sys
-import pycuda.autoinit
-import pycuda.driver as drv
-import numpy
-from pycuda.compiler import SourceModule
 
 # TODO: Come up with a way to merge adjacent objects/hazards/walkable space into rectangular chunks
 # This will reduce overhead in checking for object/hazard collision
@@ -55,20 +51,7 @@ def point_on_line(p1, p2, dx=1, dy=1, dz=1):
     x = p1[0] + dx * uv[0]
     y = p1[1] + dy * uv[1]
     z = p1[2] + dz * uv[2]
-    return x, y, z
-
-
-def random_point(xdim, ydim, zdim):
-    """
-    Gets a random point in the search region.
-    :param xdim: The x-dimensions to search within.
-    :param ydim: The y-dimensions to search within.
-    :param zdim: The z-dimensions to search within.
-    :return: A random point in the specified search space.
-    """
-    return (random.uniform(min(xdim), max(xdim)),
-            random.uniform(min(ydim), max(ydim)),
-            random.uniform(min(zdim), max(zdim)))
+    return math.floor(x)+.5, math.floor(y), math.floor(z)+.5
 
 
 def read_in_txt(txt):
@@ -425,10 +408,10 @@ class RTRRT_Agent(object):
         return False
 
     def is_walkable(self, p):
-        if p[1] in self.walkable.keys():
-            for walkable in self.walkable[p[1]]:
-                if (walkable[0] <= p[0] < walkable[0] + self.obs_dims[0] and
-                        walkable[1] <= p[2] < walkable[1] + self.obs_dims[2]):
+        if math.floor(p[1]) in self.walkable.keys():
+            for walkable in self.walkable[math.floor(p[1])]:
+                if (walkable[0]-.5 <= p[0] < walkable[0]+.5 + self.obs_dims[0] and
+                        walkable[1]-.5 <= p[2] < walkable[1]+.5 + self.obs_dims[2]):
                     return True
         return False
 
@@ -455,12 +438,24 @@ class RTRRT_Agent(object):
         :return: A point on the line between p1 and p2.
         """
         if distance(p1, p2) < self.max_distance:
+            self.walkable[p2[1]].remove((p2[0], p2[2]))
             return p2
         else:
-            return point_on_line(p1, p2,
-                                 random.uniform(0.0, self.max_distance),
-                                 random.uniform(0.0, self.max_distance),
-                                 random.uniform(0.0, self.max_distance))
+            p = point_on_line(p1, p2)
+            p = p[0], math.floor(p[1]), p[2]
+            while not self.is_walkable(p):
+                p = point_on_line(p1, p2)
+                p = p[0], math.floor(p[1]), p[2]
+            return p
+
+    def random_point(self):
+        space = []
+
+        for level in self.walkable.keys():
+            for p in self.walkable[level]:
+                space.append((p[0], level, p[1]))
+
+        return random.choice(space)
 
     def reachable(self, p, sampling_method):
 
@@ -470,22 +465,19 @@ class RTRRT_Agent(object):
                     (z-p[2]/self.radii[2])*(z-p[2]/self.radii[2])) < 1
 
         space = []
-        y = p[1]
 
+        y = p[1]
         if y in self.walkable.keys():
             for q in self.walkable[y]:
-                if ((sampling_method == constants.sample_ellipsoidal and inside(q[0], y, q[1])) or
-                        sampling_method == constants.sample_uniform):
+                if sampling_method == constants.sample_ellipsoidal and inside(q[0], y, q[1]):
                     space.append((q[0], y, q[1]))
         if y < max(self.ydims) and y+1 in self.walkable.keys():
             for q in self.walkable[y+1]:
-                if ((sampling_method == constants.sample_ellipsoidal and inside(q[0], y+1, q[1])) or
-                        sampling_method == constants.sample_uniform):
+                if sampling_method == constants.sample_ellipsoidal and inside(q[0], y+1, q[1]):
                     space.append((q[0], y+1, q[1]))
         if y > min(self.ydims) and y-1 in self.walkable.keys():
             for q in self.walkable[y-1]:
-                if ((sampling_method == constants.sample_ellipsoidal and inside(q[0], y-1, q[1])) or
-                        sampling_method == constants.sample_uniform):
+                if sampling_method == constants.sample_ellipsoidal and inside(q[0], y-1, q[1]):
                     space.append((q[0], y-1, q[1]))
 
         return space
@@ -508,12 +500,12 @@ class RTRRT_Agent(object):
         else:
             return self.ellipsoid(p1)
 
-    def uniform(self, p):
+    def uniform(self):
         """
         Returns a uniformly sampled point in the search region.
         :return: A uniformly sampled point from the search region.
         """
-        p = random.choice(self.reachable(p, constants.sample_uniform))
+        p = self.random_point()
         self.walkable[p[1]].remove((p[0], p[2]))
         return p
 
@@ -567,11 +559,6 @@ def malmo_test():
                 p = x+.5, level + 1, z+.5
                 if agent.in_bounds(p) and not agent.is_blocked(p) and not agent.is_blocked((x, level + 2, z)):
                     agent.add_walkable(p)
-
-        print agent.uniform(agent.get_start())
-        print
-
-        continue
 
         # Generate a path
         path = agent.explore()

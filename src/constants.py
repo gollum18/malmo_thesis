@@ -30,3 +30,7 @@ goal = ([0.5, 56, -24.5], [0.5, 58, -24.5], [0.5, 54, -24.5], [0.5, 61, 0.5])
 obstacle = 'obs'
 hazard = 'haz'
 air = 'air'
+
+sample_ellipsoidal = 1000
+sample_uniform = 1001
+sample_line_to = 1002
