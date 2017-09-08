@@ -4,6 +4,10 @@ import math
 import random
 import time
 import sys
+import pycuda.autoinit
+import pycuda.driver as drv
+import numpy
+from pycuda.compiler import SourceModule
 
 # TODO: Come up with a way to merge adjacent objects/hazards/walkable space into rectangular chunks
 # This will reduce overhead in checking for object/hazard collision
@@ -317,40 +321,48 @@ class RTRRT_Agent(object):
     def add_walkable(self, p):
         add_to_dictionary(self.walkable, p)
 
-    def ellipsoid(self):
+    def ellipsoid(self, p):
         """
         Samples an ellipsoidal search region around the agent.
         :return: A point from the region immediately surrounding the agent.
         """
-        theta = random.uniform(-math.pi / 2, math.pi / 2)
-        fi = random.uniform(-math.pi, math.pi)
-        return (self.radii[0] * math.cos(theta) * math.cos(fi),
-                self.radii[1] * math.cos(theta) * math.sin(fi),
-                self.radii[2] * math.sin(theta))
+        def inside(x, y, z):
+            return ((x-p[0]/self.radii[0])*(x-p[0]/self.radii[0]) +
+                    (y-p[1]/self.radii[1])*(y-p[1]/self.radii[1]) +
+                    (z-p[2]/self.radii[2])*(z-p[2]/self.radii[2])) < 1
+
+        # Create a sample space where each point is +- 1 within the current location and within the ellipsoid
+        space = []
+        y = p[1]
+
+        if y in self.walkable.keys():
+            for q in self.walkable[y]:
+                if inside(q[0], y, q[1]):
+                    space.append((q[0], y, q[1]))
+        if y < max(self.ydims) and y+1 in self.walkable.keys():
+            for q in self.walkable[y+1]:
+                if inside(q[0], y+1, q[1]):
+                    space.append((q[0], y+1, q[1]))
+        if y > min(self.ydims) and y-1 in self.walkable.keys():
+            for q in self.walkable[y-1]:
+                if inside(q[0], y-1, q[1]):
+                    space.append((q[0], y-1, q[1]))
+
+        print p
+        print space
+
+        # Get a random sample from it
+        sample = random.choice(space)
+
+        # Remove the sample from the players space and return the sample
+        self.walkable[sample[1]].remove((sample[0], sample[2]))
+        return sample
 
     def explore(self):
         """
         Finds a path utilizing a rapidly-exploring random tree.
         :return: The path if it is found, or an empty list if it is not.
         """
-
-        def find_nearest_neighbor(node):
-            """
-            Finds the nearest neighbor across all nodes in the search tree to the specified node.
-            :param node: The node to find nearest neighbor of.
-            :return: The node in the search tree that is closest to the specified node.
-            """
-            best_node = nodes[0]
-            best_distance = distance(nodes[0].get_position(), node)
-            for j in range(1, len(nodes)):
-                if nodes[j].get_position() == node.get_position():
-                    continue
-                v = distance(nodes[j].get_position(), node)
-                if v < best_distance:
-                    best_node = nodes[j]
-                    best_distance = v
-            return best_node
-
         nodes = [RTRRT_Node(self.get_start())]
 
         for i in range(self.get_max_nodes()):
@@ -484,8 +496,7 @@ class RTRRT_Agent(object):
         elif p <= (1-self.get_line_probability()/self.get_randomizer()):
             return self.uniform()
         else:
-            x, y, z = self.ellipsoid()
-            return p1[0] + x, p1[1] + y, p1[2] + z
+            return self.ellipsoid(p1)
 
     def uniform(self):
         """
@@ -493,26 +504,6 @@ class RTRRT_Agent(object):
         :return: A uniformly sampled point from the search region.
         """
         return random_point(self.get_xdims(), self.get_ydims(), self.get_zdims())
-
-    def walkable_space(self):
-        """
-        Creates a set containing walkable space from the current y level the agent is sitting at.
-        :return: A set containing all the walkable blocks the agent can reach either from jumping or falling 1 unit.
-        """
-        def walkable(level):
-            return [(pos[0], level, pos[1]) for pos in self.walkable[level]] if level in self.walkable.keys() else []
-
-        space = set()
-        y = self.position[1]
-        if min(self.ydims) < y < max(self.ydims):
-            space.update(walkable(y - 1))
-            space.update(walkable(y + 1))
-        elif y == min(self.ydims):
-            space.update(walkable(y + 1))
-        elif y == max(self.ydims):
-            space.update(walkable(y - 1))
-        space.update(walkable(y))
-        return space
 
 #######################################
 # TESTING METHODS
@@ -561,13 +552,12 @@ def malmo_test():
         for level, obstacles in agent.get_obstacles().iteritems():
             for obstacle in obstacles:
                 x, z = obstacle
-                p = x, level + 1, z
+                p = x+.5, level + 1, z+.5
                 if agent.in_bounds(p) and not agent.is_blocked(p) and not agent.is_blocked((x, level + 2, z)):
                     agent.add_walkable(p)
 
-        if _debug:
-            print constants.mission_txt[i]
-            print agent.walkable_space()
+        print agent.ellipsoid(agent.get_start())
+        print
 
         continue
 

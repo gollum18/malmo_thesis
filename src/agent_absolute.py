@@ -134,8 +134,8 @@ for i in range(len(missions)):
             action = None
             best = None
             val = float("inf")
-            for neighbor in neighbors(pos, ob.get(u'SubFloor'), ob.get(u'Floor'),
-                                      ob.get(u'Level'), ob.get(u'Roof'), ob.get(u'SuperRoof')):
+            for neighbor in neighbors(pos=pos, sub=ob.get(u'SubFloor'), floor=ob.get(u'Floor'),
+                                      level=ob.get(u'Level'), roof=ob.get(u'Roof'), super=ob.get(u'SuperRoof')):
                 if neighbor[0] not in closed:
                     temp = dist(neighbor[0], GOAL[i])
                     if temp + gs < val:

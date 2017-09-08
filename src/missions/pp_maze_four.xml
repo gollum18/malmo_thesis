@@ -42,7 +42,7 @@
 		</ServerHandlers>
 	</ServerSection>
 
-	<AgentSection mode="Survival">
+	<AgentSection mode="Creative">
 		<Name>Hill Climbing Agent</Name>
 		<AgentStart>
 			<Placement x="0.5" y="56" z="24.5" yaw="180"/>
