@@ -326,37 +326,19 @@ class RTRRT_Agent(object):
         Samples an ellipsoidal search region around the agent.
         :return: A point from the region immediately surrounding the agent.
         """
-        def inside(x, y, z):
-            return ((x-p[0]/self.radii[0])*(x-p[0]/self.radii[0]) +
-                    (y-p[1]/self.radii[1])*(y-p[1]/self.radii[1]) +
-                    (z-p[2]/self.radii[2])*(z-p[2]/self.radii[2])) < 1
 
         # Create a sample space where each point is +- 1 within the current location and within the ellipsoid
-        space = []
-        y = p[1]
+        space = self.reachable(p, constants.sample_ellipsoidal)
 
-        if y in self.walkable.keys():
-            for q in self.walkable[y]:
-                if inside(q[0], y, q[1]):
-                    space.append((q[0], y, q[1]))
-        if y < max(self.ydims) and y+1 in self.walkable.keys():
-            for q in self.walkable[y+1]:
-                if inside(q[0], y+1, q[1]):
-                    space.append((q[0], y+1, q[1]))
-        if y > min(self.ydims) and y-1 in self.walkable.keys():
-            for q in self.walkable[y-1]:
-                if inside(q[0], y-1, q[1]):
-                    space.append((q[0], y-1, q[1]))
+        if space:
+            # Get a random sample from it
+            sample = random.choice(space)
 
-        print p
-        print space
-
-        # Get a random sample from it
-        sample = random.choice(space)
-
-        # Remove the sample from the players space and return the sample
-        self.walkable[sample[1]].remove((sample[0], sample[2]))
-        return sample
+            # Remove the sample from the players space and return the sample
+            self.walkable[sample[1]].remove((sample[0], sample[2]))
+            return sample
+        else:
+            return self.uniform()
 
     def explore(self):
         """
@@ -480,6 +462,34 @@ class RTRRT_Agent(object):
                                  random.uniform(0.0, self.max_distance),
                                  random.uniform(0.0, self.max_distance))
 
+    def reachable(self, p, sampling_method):
+
+        def inside(x, y, z):
+            return ((x-p[0]/self.radii[0])*(x-p[0]/self.radii[0]) +
+                    (y-p[1]/self.radii[1])*(y-p[1]/self.radii[1]) +
+                    (z-p[2]/self.radii[2])*(z-p[2]/self.radii[2])) < 1
+
+        space = []
+        y = p[1]
+
+        if y in self.walkable.keys():
+            for q in self.walkable[y]:
+                if ((sampling_method == constants.sample_ellipsoidal and inside(q[0], y, q[1])) or
+                        sampling_method == constants.sample_uniform):
+                    space.append((q[0], y, q[1]))
+        if y < max(self.ydims) and y+1 in self.walkable.keys():
+            for q in self.walkable[y+1]:
+                if ((sampling_method == constants.sample_ellipsoidal and inside(q[0], y+1, q[1])) or
+                        sampling_method == constants.sample_uniform):
+                    space.append((q[0], y+1, q[1]))
+        if y > min(self.ydims) and y-1 in self.walkable.keys():
+            for q in self.walkable[y-1]:
+                if ((sampling_method == constants.sample_ellipsoidal and inside(q[0], y-1, q[1])) or
+                        sampling_method == constants.sample_uniform):
+                    space.append((q[0], y-1, q[1]))
+
+        return space
+
     def sample(self, p1, p2):
         """
         Samples the search region for a new point in the tree.
@@ -498,12 +508,14 @@ class RTRRT_Agent(object):
         else:
             return self.ellipsoid(p1)
 
-    def uniform(self):
+    def uniform(self, p):
         """
         Returns a uniformly sampled point in the search region.
         :return: A uniformly sampled point from the search region.
         """
-        return random_point(self.get_xdims(), self.get_ydims(), self.get_zdims())
+        p = random.choice(self.reachable(p, constants.sample_uniform))
+        self.walkable[p[1]].remove((p[0], p[2]))
+        return p
 
 #######################################
 # TESTING METHODS
@@ -556,7 +568,7 @@ def malmo_test():
                 if agent.in_bounds(p) and not agent.is_blocked(p) and not agent.is_blocked((x, level + 2, z)):
                     agent.add_walkable(p)
 
-        print agent.ellipsoid(agent.get_start())
+        print agent.uniform(agent.get_start())
         print
 
         continue
