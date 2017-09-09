@@ -4,6 +4,7 @@ import math
 import random
 import time
 import sys
+import json
 
 # TODO: Come up with a way to merge adjacent objects/hazards/walkable space into rectangular chunks
 # This will reduce overhead in checking for object/hazard collision
@@ -167,7 +168,6 @@ class RTRRT_Agent(object):
                  xradius=1,
                  yradius=1,
                  zradius=1,
-                 g_tolerance=0.5,
                  max_distance=7.0,
                  obsx=1,
                  obsy=1,
@@ -188,7 +188,6 @@ class RTRRT_Agent(object):
         self.randomizer = m_decider
         self.nodes = num_nodes
         self.radii = xradius, yradius, zradius
-        self.goal_tolerance = g_tolerance
         self.max_distance = max_distance
         self.obs_dims = obsx, obsy, obsz
         self.haz_dims = hazx, hazy, hazz
@@ -256,9 +255,6 @@ class RTRRT_Agent(object):
 
     def get_zradius(self):
         return self.radii[2]
-
-    def get_goal_tolerance(self):
-        return self.goal_tolerance
 
     def get_max_branch_distance(self):
         return self.max_distance
@@ -336,7 +332,9 @@ class RTRRT_Agent(object):
             for p in nodes:
                 if distance(p.get_position(), rand) < distance(nn.get_position(), rand):
                     nn = p
-            nodes.append(RTRRT_Node(self.sample(nn.get_position(), rand), nn))
+            node = RTRRT_Node(self.sample(nn.get_position(), rand), nn)
+            self.walkable[node.get_position()[1]].remove((node.get_position()[0]+.5, node.get_position()[2]+.5))
+            nodes.append(node)
             if self.is_goal(nodes[-1].get_position()):
                 path = []
                 current = nodes[-1]
@@ -375,9 +373,11 @@ class RTRRT_Agent(object):
         :return: True if the point falls within the bounds of the goal, False otherwise.
         """
         x, y, z = p
-        if (self.goal[0] - self.goal_tolerance <= x <= self.goal[0] + self.goal_tolerance and
-                self.goal[1] - self.goal_tolerance <= y <= self.goal[1] + self.goal_tolerance and
-                self.goal[2] - self.goal_tolerance <= z <= self.goal[2] + self.goal_tolerance):
+        if (self.goal[0] <= x <= self.goal[0] and
+                self.goal[1] <= y <= self.goal[1] and
+                self.goal[2] <= z <= self.goal[2]):
+            print self.goal
+            print x, y, z
             return True
         return False
 
@@ -409,9 +409,9 @@ class RTRRT_Agent(object):
 
     def is_walkable(self, p):
         if math.floor(p[1]) in self.walkable.keys():
-            for walkable in self.walkable[math.floor(p[1])]:
-                if (walkable[0]-.5 <= p[0] < walkable[0]+.5 + self.obs_dims[0] and
-                        walkable[1]-.5 <= p[2] < walkable[1]+.5 + self.obs_dims[2]):
+            for walkable in self.walkable[p[1]]:
+                if (walkable[0] <= p[0] < walkable[0] + self.obs_dims[0] and
+                        walkable[1] <= p[2] < walkable[1] + self.obs_dims[2]):
                     return True
         return False
 
@@ -453,7 +453,7 @@ class RTRRT_Agent(object):
 
         for level in self.walkable.keys():
             for p in self.walkable[level]:
-                space.append((p[0], level, p[1]))
+                space.append((p[0]-.5, level, p[1]-.5))
 
         return random.choice(space)
 
@@ -470,15 +470,15 @@ class RTRRT_Agent(object):
         if y in self.walkable.keys():
             for q in self.walkable[y]:
                 if sampling_method == constants.sample_ellipsoidal and inside(q[0], y, q[1]):
-                    space.append((q[0], y, q[1]))
+                    space.append((q[0]-.5, y, q[1]-.5))
         if y < max(self.ydims) and y+1 in self.walkable.keys():
             for q in self.walkable[y+1]:
                 if sampling_method == constants.sample_ellipsoidal and inside(q[0], y+1, q[1]):
-                    space.append((q[0], y+1, q[1]))
+                    space.append((q[0]-.5, y+1, q[1]-.5))
         if y > min(self.ydims) and y-1 in self.walkable.keys():
             for q in self.walkable[y-1]:
                 if sampling_method == constants.sample_ellipsoidal and inside(q[0], y-1, q[1]):
-                    space.append((q[0], y-1, q[1]))
+                    space.append((q[0]-.5, y-1, q[1]-.5))
 
         return space
 
@@ -492,9 +492,17 @@ class RTRRT_Agent(object):
         # TODO: This should sample from walkable space to be meaningful
         p = random.random()
         if p >= 1-self.get_goal_probability():
-            return self.line_to(p1, self.get_goal())
+            # return self.line_to(p1, self.get_goal())
+            if random.random >= .5:
+                return self.uniform()
+            else:
+                self.ellipsoid(p1)
         elif p <= 1-self.get_line_probability():
-            return self.line_to(p1, p2)
+            # return self.line_to(p1, p2)
+            if random.random >= .5:
+                return self.uniform()
+            else:
+                self.ellipsoid(p1)
         elif p <= (1-self.get_line_probability()/self.get_randomizer()):
             return self.uniform()
         else:
@@ -505,9 +513,7 @@ class RTRRT_Agent(object):
         Returns a uniformly sampled point in the search region.
         :return: A uniformly sampled point from the search region.
         """
-        p = self.random_point()
-        self.walkable[p[1]].remove((p[0], p[2]))
-        return p
+        return self.random_point()
 
 #######################################
 # TESTING METHODS
@@ -536,7 +542,7 @@ def descriptor_test():
 
 def malmo_test():
     for i in range(len(constants.mission_xml)):
-        # Create an agent and generate a path
+        #Create an agent and generate a path
         agent = RTRRT_Agent(start=constants.start,
                             goal=constants.goal[i],
                             xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
@@ -552,12 +558,12 @@ def malmo_test():
                 for hazard in value:
                     agent.add_obstacle(hazard)
 
-        # Add in walkable space
+        #  Add in walkable space
         for level, obstacles in agent.get_obstacles().iteritems():
             for obstacle in obstacles:
                 x, z = obstacle
-                p = x+.5, level + 1, z+.5
-                if agent.in_bounds(p) and not agent.is_blocked(p) and not agent.is_blocked((x, level + 2, z)):
+                p = x, level + 1, z
+                if agent.in_bounds(p) and not agent.is_blocked(p) and not agent.is_blocked((p[0], p[1]+2, p[2])):
                     agent.add_walkable(p)
 
         # Generate a path
@@ -610,15 +616,18 @@ def malmo_test():
         print "Mission running ",
 
         # Needed to prevent skipped commands
-        time.sleep(5)
+        time.sleep(2.5)
 
         while world_state.is_mission_running:
             # Guide the agent along the path
-            world_state = agent_host.getWorldState()
+            sys.stdout.write(".")
             if path:
-                loc = path.pop()
-                agent_host.sendCommand("tp {0} {1} {2}".format(loc[0], loc[1], loc[2]))
-            time.sleep(.3)
+                pos = path.pop()
+                agent_host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
+            time.sleep(1)
+
+        print "Mission ended ",
+        print
 
 
 def rrt_test():
