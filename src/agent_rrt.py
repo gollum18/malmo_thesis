@@ -4,7 +4,6 @@ import math
 import random
 import time
 import sys
-import json
 
 # TODO: Come up with a way to merge adjacent objects/hazards/walkable space into rectangular chunks
 # This will reduce overhead in checking for object/hazard collision
@@ -619,6 +618,9 @@ def malmo_test():
         time.sleep(2.5)
 
         while world_state.is_mission_running:
+            # Needed to transition between missions
+            world_state = agent_host.getWorldState()
+
             # Guide the agent along the path
             sys.stdout.write(".")
             if path:
