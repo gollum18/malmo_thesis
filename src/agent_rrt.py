@@ -82,7 +82,7 @@ def read_in_txt(txt):
             xl, xu, yl = int(parts[0]), int(parts[1]), int(parts[2])
             yu, zl, zu = int(parts[3]), int(parts[4]), int(parts[5])
             for dx in range(xu-xl+1):
-                for dy in range(yu-yl+1):
+                for dy in range(yu-yl-1):
                     for dz in range(zu-zl+1):
                         point = xl+dx, yl+dy, zl+dz
                         if btype == constants.obstacle:
@@ -165,17 +165,10 @@ class RTRRT_Agent(object):
                  m_decider=3.25,
                  num_nodes=5000,
                  xradius=1,
-                 yradius=1,
+                 yradius=1.25,
                  zradius=1,
                  max_distance=7.0,
-                 obsx=1,
-                 obsy=1,
-                 obsz=1,
-                 hazx=1,
-                 hazy=1,
-                 hazz=1,
-                 movement_distance=1,
-                 move_time=2.5):
+                 descriptor=None):
         self.start = start
         self.goal = goal
         self.position = self.start
@@ -188,92 +181,184 @@ class RTRRT_Agent(object):
         self.nodes = num_nodes
         self.radii = xradius, yradius, zradius
         self.max_distance = max_distance
-        self.obs_dims = obsx, obsy, obsz
-        self.haz_dims = hazx, hazy, hazz
-        self.movement_distance = movement_distance
+        self.descriptor = descriptor
         self.obstacles = {}
         self.hazards = {}
         self.walkable = {}
-        self.move_time = move_time
-        self.move_timer = Timer()
+        if descriptor:
+            # Read in the obstacles/hazards from file and add them to the agents world model
+            for key, value in read_in_txt(self.descriptor).iteritems():
+                if key == constants.obstacle:
+                    for obstacle in value:
+                        self.add_obstacle(obstacle)
+                elif key == constants.hazard:
+                    for hazard in value:
+                        self.add_obstacle(hazard)
+
+            #  Add in walkable space
+            for level, obstacles in self.get_obstacles().iteritems():
+                for obstacle in obstacles:
+                    x, z = obstacle
+                    p = x, level + 1, z
+                    if self.in_bounds(p) and not self.is_blocked(p) and not self.is_blocked((p[0], p[1]+2, p[2])):
+                        self.add_walkable(p)
 
     #######################################
     # ACCESSORS/MUTATORS
     #######################################
 
     def get_start(self):
+        """
+        Returns a tuple x, y, z that represents the starting position of the agent.
+        :return: The starting coordinate.
+        """
         return self.start
 
     def get_goal(self):
+        """
+        Returns a tuple x, y, z that represents the goal postition of the agent.
+        :return: The goal coordinate of the agent.
+        """
         return self.goal
 
     def get_xdims(self):
+        """
+        Returns a tuple containing the x dimensions of the search space.
+        :return: The x dimensions of the search space.
+        """
         return self.xdims
 
     def get_ydims(self):
+        """
+        Returns a tuple containing the y dimensions of the search space.
+        :return: The y dimensions of the search space.
+        """
         return self.ydims
 
     def get_zdims(self):
+        """
+        Returns a tuple containing the z dimensions of the search space.
+        :return: The z dimensions of the search space.
+        """
         return self.zdims
 
     def get_xmin(self):
+        """
+        Returns the minimum x (left dimension) dimension of the search space.
+        :return: The minimum x dimension of the search space.
+        """
         return min(self.xdims)
 
     def get_xmax(self):
+        """
+        Returns the maximum x (right dimension) dimension of the search space.
+        :return: The maximum x dimension of the search space.
+        """
         return max(self.xdims)
 
     def get_ymin(self):
+        """
+        Returns the minimum (bottom dimension) dimension of the search space.
+        :return: The minimum y dimension of the search space.
+        """
         return min(self.ydims)
 
     def get_ymax(self):
+        """
+        Returns the maximum (top dimension) dimension of the search space.
+        :return: The maximum y dimension of the search space.
+        """
         return max(self.ydims)
 
     def get_zmin(self):
+        """
+        Returns the minimum (front dimension) dimension of the search space.
+        :return: The minimum dimension of the search space.
+        """
         return min(self.zdims)
 
     def get_zmax(self):
+        """
+        Returns the maxmimum (back dimension) dimension of the search space.
+        :return: The maximum dimension of the saerch space.
+        """
         return max(self.zdims)
 
     def get_line_probability(self):
+        """
+        Returns the probability of sampling using the line-to algorithm.
+        :return: The probability of sampling using line-to.
+        """
         return self.line_probability
 
     def get_goal_probability(self):
+        """
+        Returns the probability of sampling the goal using the line-to algorithm.
+        :return: The probability of sampling the goal using line-to.
+        """
         return self.goal_probability
 
     def get_randomizer(self):
+        """
+        Returns a variable that decides between the various sampling methods.
+        :return: A variable that decides sampling methods.
+        """
         return self.randomizer
 
     def get_max_nodes(self):
+        """
+        Returns the maximum amount of nodes RRT is allowed to generate.
+        :return: The maximum amount of nodes allowed for generation.
+        """
         return self.nodes
 
     def get_xradius(self):
+        """
+        Returns the x radius utilized by the ellipsoidal sampling algorithm.
+        :return: The x radius used by the ellipsoidal sampling algorithm.
+        """
         return self.radii[0]
 
     def get_yradius(self):
+        """
+        Returns the y radius utilized by the ellipsoidal sampling algorithm.
+        :return: The y radius used by the ellipsoidal sampling algorithm.
+        """
         return self.radii[1]
 
     def get_zradius(self):
+        """
+        Returns the z radius utilized by the ellipsoidal sampling algorithm.
+        :return: The z radius used by the ellipsoidal sampling algorithm.
+        """
         return self.radii[2]
 
     def get_max_branch_distance(self):
+        """
+        Returns the max branching distance between nodes.
+        :return: The max branching distance between nodes.
+        """
         return self.max_distance
 
-    def get_obstacle_dimensions(self):
-        return self.obs_dims
-
-    def get_hazard_dimensions(self):
-        return self.haz_dims
-
-    def get_movement_distance(self):
-        return self.movement_distance
-
     def get_obstacles(self):
+        """
+        Returns all obstacles in the sample space.
+        :return: A dictionary indexed by y (height) where each index contains a list of tuples x, y.
+        """
         return self.obstacles
 
     def get_hazards(self):
+        """
+        Returns all hazards in the sample space.
+        :return: A dictionary indexed by y (height) where each index contains a list of tuples x, y.
+        """
         return self.hazards
 
     def get_walkable(self):
+        """
+        Returns all available walkable space.
+        :return: A dictionary indexed by y (height) where each index contains a list of tuples x, y.
+        """
         return self.walkable
 
     #######################################
@@ -283,7 +368,7 @@ class RTRRT_Agent(object):
     def add_hazard(self, p):
         """
         Adds a hazard to the search region.
-        :param p: The bottom, lower-left point of the hazard.
+        :param p: The bottom, upper-left point of the hazard.
         :return: N/A
         """
         add_to_dictionary(self.hazards, p)
@@ -291,12 +376,17 @@ class RTRRT_Agent(object):
     def add_obstacle(self, p):
         """
         Adds an obstacle to the search region.
-        :param p: The bottom, lower-left point of the obstacle.
+        :param p: The top, upper-left point of the obstacle.
         :return: N/A
         """
         add_to_dictionary(self.obstacles, p)
 
     def add_walkable(self, p):
+        """
+        Adds a walkable location to the search region.
+        :param p: The bottom, upper-left point of the obstacle.
+        :return: N/A
+        """
         add_to_dictionary(self.walkable, p)
 
     def ellipsoid(self, p):
@@ -332,7 +422,7 @@ class RTRRT_Agent(object):
                 if distance(p.get_position(), rand) < distance(nn.get_position(), rand):
                     nn = p
             node = RTRRT_Node(self.sample(nn.get_position(), rand), nn)
-            self.walkable[node.get_position()[1]].remove((node.get_position()[0]+.5, node.get_position()[2]+.5))
+            self.walkable[node.get_position()[1]].remove((node.get_position()[0], node.get_position()[2]))
             nodes.append(node)
             if self.is_goal(nodes[-1].get_position()):
                 path = []
@@ -372,9 +462,9 @@ class RTRRT_Agent(object):
         :return: True if the point falls within the bounds of the goal, False otherwise.
         """
         x, y, z = p
-        if (self.goal[0] <= x <= self.goal[0] and
-                self.goal[1] <= y <= self.goal[1] and
-                self.goal[2] <= z <= self.goal[2]):
+        if (self.goal[0] <= x < self.goal[0] + 1 and
+                self.goal[1] <= y < self.goal[1] + 1 and
+                self.goal[2] <= z < self.goal[2] + 1):
             print self.goal
             print x, y, z
             return True
@@ -388,8 +478,8 @@ class RTRRT_Agent(object):
         """
         if p[1] in self.hazards.keys():
             for hazard in self.hazards[p[1]]:
-                if (hazard[0] <= p[0] < hazard[0] + self.haz_dims[0] and
-                        hazard[1] <= p[2] < hazard[1] + self.haz_dims[2]):
+                if (hazard[0] <= p[0] < hazard[0] and
+                        hazard[1] <= p[2] < hazard[1] + 1):
                     return True
         return False
 
@@ -401,16 +491,21 @@ class RTRRT_Agent(object):
         """
         if p[1] in self.obstacles.keys():
             for obstacle in self.obstacles[p[1]]:
-                if (obstacle[0] <= p[0] < obstacle[0] + self.obs_dims[0] and
-                        obstacle[1] <= p[2] < obstacle[1] + self.obs_dims[2]):
+                if (obstacle[0] <= p[0] < obstacle[0] + 1 and
+                        obstacle[1] <= p[2] < obstacle[1] + 1):
                     return True
         return False
 
     def is_walkable(self, p):
+        """
+        Determines if a point is walkable.
+        :param p: The point to check.
+        :return: True if the point is walkable, False if not.
+        """
         if math.floor(p[1]) in self.walkable.keys():
             for walkable in self.walkable[p[1]]:
-                if (walkable[0] <= p[0] < walkable[0] + self.obs_dims[0] and
-                        walkable[1] <= p[2] < walkable[1] + self.obs_dims[2]):
+                if (walkable[0] <= p[0] < walkable[0] + 1 and
+                        walkable[1] <= p[2] < walkable[1] + 1):
                     return True
         return False
 
@@ -448,17 +543,33 @@ class RTRRT_Agent(object):
             return p
 
     def random_point(self):
+        """
+        Returns a random point fromm the walkable space.
+        :return: A random point from walkable space.
+        """
         space = []
 
         for level in self.walkable.keys():
             for p in self.walkable[level]:
-                space.append((p[0]-.5, level, p[1]-.5))
+                space.append((p[0], level, p[1]))
 
         return random.choice(space)
 
     def reachable(self, p, sampling_method):
-
+        """
+        Determines walkable space that is reachable from the specified position.
+        :param p: The point to determine reachability from.
+        :param sampling_method: The sampling method used. See constants.py for available options.
+        :return: All points within reachable distance from the agent.
+        """
         def inside(x, y, z):
+            """
+            Determines if the specified coordinates lie within the agents reachability ellipsoid.
+            :param x: The x coordinate.
+            :param y: The y coordinate.
+            :param z: The z coordinate.
+            :return: True if the spceified coordinates lie within the agents reachability ellipsoid, False otherwise.
+            """
             return ((x-p[0]/self.radii[0])*(x-p[0]/self.radii[0]) +
                     (y-p[1]/self.radii[1])*(y-p[1]/self.radii[1]) +
                     (z-p[2]/self.radii[2])*(z-p[2]/self.radii[2])) < 1
@@ -546,24 +657,10 @@ def malmo_test():
                             goal=constants.goal[i],
                             xdims=(constants.lower_dimensions[i][0], constants.upper_dimensions[i][0]),
                             ydims=(constants.lower_dimensions[i][1], constants.upper_dimensions[i][1]),
-                            zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]))
+                            zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]),
+                            descriptor=constants.mission_txt[i])
 
-        # Read in the obstacles/hazards from file and add them to the agents world model
-        for key, value in read_in_txt(constants.mission_txt[i]).iteritems():
-            if key == constants.obstacle:
-                for obstacle in value:
-                    agent.add_obstacle(obstacle)
-            elif key == constants.hazard:
-                for hazard in value:
-                    agent.add_obstacle(hazard)
-
-        #  Add in walkable space
-        for level, obstacles in agent.get_obstacles().iteritems():
-            for obstacle in obstacles:
-                x, z = obstacle
-                p = x, level + 1, z
-                if agent.in_bounds(p) and not agent.is_blocked(p) and not agent.is_blocked((p[0], p[1]+2, p[2])):
-                    agent.add_walkable(p)
+        
 
         # Generate a path
         path = agent.explore()
