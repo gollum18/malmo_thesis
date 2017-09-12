@@ -82,7 +82,7 @@ def read_in_txt(txt):
             xl, xu, yl = int(parts[0]), int(parts[1]), int(parts[2])
             yu, zl, zu = int(parts[3]), int(parts[4]), int(parts[5])
             for dx in range(xu-xl+1):
-                for dy in range(yu-yl-1):
+                for dy in range(yu-yl+1):
                     for dz in range(zu-zl+1):
                         point = xl+dx, yl+dy, zl+dz
                         if btype == constants.obstacle:
@@ -403,7 +403,6 @@ class RTRRT_Agent(object):
             sample = random.choice(space)
 
             # Remove the sample from the players space and return the sample
-            self.walkable[sample[1]].remove((sample[0], sample[2]))
             return sample
         else:
             return self.uniform()
@@ -532,7 +531,6 @@ class RTRRT_Agent(object):
         :return: A point on the line between p1 and p2.
         """
         if distance(p1, p2) < self.max_distance:
-            self.walkable[p2[1]].remove((p2[0], p2[2]))
             return p2
         else:
             p = point_on_line(p1, p2)
@@ -660,8 +658,6 @@ def malmo_test():
                             zdims=(constants.lower_dimensions[i][2], constants.upper_dimensions[i][2]),
                             descriptor=constants.mission_txt[i])
 
-        
-
         # Generate a path
         path = agent.explore()
 
@@ -722,7 +718,8 @@ def malmo_test():
             sys.stdout.write(".")
             if path:
                 pos = path.pop()
-                agent_host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
+                print pos[0] - .5, pos[1], pos[2] + .5
+                agent_host.sendCommand("tp {0} {1} {2}".format(pos[0] - .5, pos[1], pos[2] + .5))
             time.sleep(1)
 
         print "Mission ended ",
