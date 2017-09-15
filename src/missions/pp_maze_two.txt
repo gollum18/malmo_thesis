@@ -1,18 +1,24 @@
-obs 15
+// These files contain obstacle regions
+// The parser will ignore any line that begins with //
+// Walls
 -25 25 55 70 -25 -25
 -25 25 55 70 25 25
 -25 -25 55 70 -25 25
 25 25 55 70 -25 25
--24 24 55 55 -24 24
+// Floor
+-25 25 55 55 -25 25
+// Elevation
 0 0 56 56 -23 -23
 -1 -1 56 56 -24 -24
 0 0 56 56 -24 -24
 1 1 56 56 -24 -24
+// Goal
 0 0 57 57 -24 -24
+// Start
 0 0 55 55 24 24
+// Obstacle
 -5 5 55 60 -5 5
+// Starting enclosure
 -1 -1 55 57 18 24
 1 1 55 57 18 24
 0 0 58 58 18 24
-air 0
-haz 0

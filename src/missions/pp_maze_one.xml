@@ -25,9 +25,9 @@
 				<!-- Draw an obstacle in the center of the map -->
 				<DrawCuboid x1="-5" y1="55" z1="-5" x2="5" y2="60" z2="5" type="obsidian"/>
 				<!-- Draw the starting container -->
-				<DrawCuboid x1="-1" y1="55" z1="24" x2="-1" y2="57" z2="18" type="obsidian"/>
-				<DrawCuboid x1="1" y1="55" z1="24" x2="1" y2="57" z2="18" type="obsidian"/>
-				<DrawCuboid x1="0" y1="58" z1="24" x2="0" y2="58" z2="18" type="obsidian"/>
+				<DrawCuboid x1="-1" y1="55" z1="18" x2="-1" y2="57" z2="24" type="obsidian"/>
+				<DrawCuboid x1="1" y1="55" z1="18" x2="1" y2="57" z2="24" type="obsidian"/>
+				<DrawCuboid x1="0" y1="58" z1="18" x2="0" y2="58" z2="24" type="obsidian"/>
 			</DrawingDecorator>
 			<ServerQuitWhenAnyAgentFinishes/>
 		</ServerHandlers>

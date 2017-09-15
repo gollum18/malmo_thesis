@@ -16,10 +16,10 @@
 		<ServerHandlers>
 			<FlatWorldGenerator generatorString="3;7,44*49,73,35:1,159:4,95:13,35:13,159:11,95:10,159:14,159:6,35:6,95:6;12;"/>
 			<DrawingDecorator>
-				<DrawCuboid x1="-25" y1="53" z1="-25" x2="25" y2="70" z2="-25" type="obsidian"/>
-				<DrawCuboid x1="-25" y1="53" z1="25" x2="25" y2="70" z2="25" type="obsidian"/>
-				<DrawCuboid x1="-25" y1="53" z1="-25" x2="-25" y2="70" z2="25" type="obsidian"/>
-				<DrawCuboid x1="25" y1="53" z1="-25" x2="25" y2="70" z2="25" type="obsidian"/>
+				<DrawCuboid x1="-25" y1="55" z1="-25" x2="25" y2="70" z2="-25" type="obsidian"/>
+				<DrawCuboid x1="-25" y1="55" z1="25" x2="25" y2="70" z2="25" type="obsidian"/>
+				<DrawCuboid x1="-25" y1="55" z1="-25" x2="-25" y2="70" z2="25" type="obsidian"/>
+				<DrawCuboid x1="25" y1="55" z1="-25" x2="25" y2="70" z2="25" type="obsidian"/>
 
 				<DrawBlock x="0" y="54" z="-24" type="air"/>
 				<DrawBlock x="-1" y="55" z="-24" type="air"/>
