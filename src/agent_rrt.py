@@ -1,3 +1,4 @@
+from __future__ import division
 import MalmoPython
 import constants
 import math
@@ -61,7 +62,7 @@ class Agent(object):
 
     def __init__(self, start=(0, 0, 0), goal=(10, 10, 10), 
                  xdims=(0, 10), ydims=(0, 10), zdims=(0, 10), 
-                 nodes=5000, p_goal=.5, p_line=.05):
+                 nodes=5000, p_goal=.5, p_line=.05, step=10):
         """
         Creates a new instance of a search Agent.
         :param start: The starting position of the Agent.
@@ -71,7 +72,8 @@ class Agent(object):
         :param zdims: The z dimensions of the search space.
         :param nodes: The maximum number of node the Agent can generate.
         :param p_goal: The probability of sampling the goal.
-        :param p_line: Thr probability of sampling using line-to.
+        :param p_line: The probability of sampling using line-to.
+        :param step: The increment for linear interpolation in line-to.
         :return: A new Agent instance.
         """
         self.start = start
@@ -82,6 +84,7 @@ class Agent(object):
         self.nodes = nodes
         self.p_goal = p_goal
         self.p_line = p_line
+        self.step = step
         self.obstacles = set()
         self.walkable = {}
 
@@ -141,6 +144,15 @@ class Agent(object):
         """
         if 0 <= p <= 1:
             self.p_line = p
+
+    def set_step(self, step):
+        """
+        Sets the linear interpolation increment in line_to.
+        :param step: The new increment.
+        :return: N/A
+        """
+        if step > 0:
+            self.step = step
 
     def get_start(self):
         """
@@ -219,6 +231,13 @@ class Agent(object):
         """
         return self.p_line
 
+    def get_step(self):
+        """
+        Returns the linear interpolation increment used in line_to.
+        :return: The linear interpolation increment.
+        """
+        return self.step
+
     def add_obstacle(self, obs):
         """
         Adds an obstacle region to the search space.
@@ -239,7 +258,7 @@ class Agent(object):
             self.walkable[walk[1]] = set()
             self.walkable[walk[1]].add((walk[0], walk[2]))
 
-    def ellipsoid(self, p, xr, yr, zr):
+    def ellipsoid(self, p, xr=1.0, yr=1.25, zr=1.0):
         """
         Samples a point using the ellipsoid sampling algorithm.
         :param p: The point to sample outwards from.
@@ -248,7 +267,7 @@ class Agent(object):
         :param zr: The z radius of the ellipsoid.
         :return: A tuple (x, y, z).
         """
-        def inside(self, x, y, z):
+        def inside(x, y, z):
             return ((x-p[0]/xr)*(x-p[0]/xr) +
                     (y-p[1]/yr)*(y-p[1]/yr) +
                     (z-p[2]/zr)*(z-p[2]/zr)) < 1
@@ -259,19 +278,19 @@ class Agent(object):
                 if (self.in_bounds((q[0], y, q[1])) and
                     inside(q[0], y, q[1]) and 
                     self.line_of_sight(p, (q[0], y, q[1]))):
-                    space.append((q[0], y, q[1]))
+                    space.add((q[0], y, q[1]))
         if y < max(self.ydims) and y+1 in self.walkable.keys():
             for q in self.walkable[y+1]:
                 if (self.in_bounds((q[0], y+1, q[1])) and
                     inside(q[0], y+1, q[1]) and 
                     self.line_of_sight(p, (q[0], y+1, q[1]))):
-                    space.append((q[0], y+1, q[1]))
+                    space.add((q[0], y+1, q[1]))
         if y > min(self.ydims) and y-1 in self.walkable.keys():
             for q in self.walkable[y-1]:
                 if (self.in_bounds((q[0], y-1, q[1])) and
                     inside(q[0], y-1, q[1]) and 
                     self.line_of_sight(p, (q[0], y-1, q[1]))):
-                    space.append((q[0], y-1, q[1]))
+                    space.add((q[0], y-1, q[1]))
         return random.sample(space, 1)[0]
 
     def explore(self):
@@ -309,12 +328,15 @@ class Agent(object):
             for x in range(obs[0], obs[1] + 1):
                 for z in range(obs[4], obs[5] + 1):
                     if (not self.is_obstacle((x, obs[3] + 1, z)) and 
-                        not self.is_obstacle((x, obs[3] + 2, z)) and
-                        self.in_bounds((x+.5, obs[3], z+.5))):
-                        # TODO: Perform in bounds checking
-                        # for some reason here, bounds checking eliminates
-                        # valid points.
-                        self.add_walkable((x+.5, obs[3], z+.5))
+                        not self.is_obstacle((x, obs[3] + 2, z))):
+                            if self.in_bounds((x+.5, obs[3]+1, z+.5)):
+                                self.add_walkable((x+.5, obs[3]+1, z+.5))
+
+    def interpolate(self, p1, p2, t):
+        x = (1-t)*p1[0] + t*p2[0]
+        y = (1-t)*p1[1] + t*p2[1]
+        z = (1-t)*p1[2] + t*p2[2]
+        return x, y, z
 
     def in_bounds(self, p):
         """
@@ -346,7 +368,7 @@ class Agent(object):
         :return: True if the specified point is the goal, False otherwise.
         """
         # Simply call is same point, it essentially does what we want
-        return self.is_same_point(p, self.goal)
+        return self.is_same_point(p, self.goal, .05, .05, .05)
 
     def is_walkable(self, p):
         """
@@ -366,7 +388,7 @@ class Agent(object):
         # If we get here then there is no walkable space at p, return False
         return False
 
-    def is_same_point(self, p1, p2):
+    def is_same_point(self, p1, p2, xt, yt, zt):
         """
         Determines if p1 and p2 are the same point.
         :param p1: The first point.
@@ -375,9 +397,12 @@ class Agent(object):
         """
         # This algorithm accounts for floating point error with 
         #   line_to and line_of_sight
-        return (p2[0] - .05 <= p1[0] < p2[0] + .05 and
-                p2[1] - .05 <= p1[1] < p2[1] + .05 and 
-                p2[2] - .05 <= p1[2] < p2[2] + .05)
+        def isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+            return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
+
+        return (isclose(p1[0], p2[0], xt) and
+                isclose(p1[1], p2[1], yt) and
+                isclose(p1[2], p2[2], zt))
 
     def line_of_sight(self, p1, p2):
         """
@@ -386,17 +411,13 @@ class Agent(object):
         :param p2: The point to check line of sight to.
         :return: True if there is line of sight from p1 to p2, False otherwise.
         """
-        # This is a very similar algorithm to line_to
-        dx, dy, dz = p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]
-        s = max(dx, dy, dz)
-        if s == 0:
-            s = 1
-        # The only difference is that if we come across an obstacle we return False
-        while not self.is_same_point(p1, p2):
-            if self.is_blocked(p1):
+        t = 0
+        space = set()
+        while t < self.step:
+            p3 = self.interpolate(p1, p2, t/self.step)
+            if self.is_obstacle(p3):
                 return False
-            p1 = p1[0] + dx/s, p1[1] + dy/s, p1[2] + dz/s
-        # Otherwise if we successfully step to the destination then return True 
+            t += 1
         return True
 
     def line_to(self, p1, p2):
@@ -406,29 +427,19 @@ class Agent(object):
         :param p2: The second terminus of the line.
         :return: A random point on the line p1, p2.
         """
-        # Calculate the greatest distance to be our normalizer for division
-        dx, dy, dz = p2[0] - p1[0], p2[1] - p1[1], p2[2] - p1[2]
-        s = max(dx, dy, dz)
-        if s == 0:
-            s = 1
-        # Perform the initial step
-        p1 = p1[0] + dx/s, p1[1] + dy/s, p1[2] + dz/s
+        t = 0
         space = set()
-        # Loop until we hit an obstacle or reach our destination
-        while not self.is_obstacle(p1) and not self.is_same_point(p1, p2):
-            if self.is_walkable(p1):
-                space.add(self.nearest_walkable(p1))
-            p1 = p1[0] + dx/s, p1[1] + dy/s, p1[2] + dz/s
-        # Check if the last point is our destination, if so add it
-        if self.is_same_point(p1, p2):
-            space.add(p2)
-        # Fallback to ensure we return something in case we didnt get to any 
-        #   points
-        if not space:
-            return self.uniform(p1)
-        # Otherwise return a random point on the line from p1 to p2
-        return random.sample(space, 1)[0]
-        
+        while t < self.step:
+            p3 = self.interpolate(p1, p2, t/self.step)
+            if self.is_obstacle(p3):
+                break
+            if self.is_walkable(p3):
+                space.add(self.nearest_walkable(p3))
+            t += 1
+        if space:
+            return random.sample(space, 1)[0]
+        return self.uniform(p1)
+
     def load_mission_parameters(self, filename):
         """
         Loads in geographical info about a mission from file.
@@ -509,7 +520,7 @@ class Agent(object):
             return self.line_to(p1, self.get_goal())
         elif p <= 1-self.get_line_probability():
             return self.line_to(p1, p2)
-        elif p <= (1-self.get_line_probability()/self.get_randomizer()):
+        elif p <= (1-self.get_line_probability()/3.25):
             return self.uniform(p1[1])
         else:
             return self.ellipsoid(p1)
@@ -538,81 +549,96 @@ class Agent(object):
         x, z = random.sample(space, 1)[0]
         return x, y, z
 
-for i in range(len(constants.mission_xml)):
-    # Create an agent and generate a path
-    agent = Agent()
-    agent.set_start(constants.start)
-    agent.set_goal(constants.goal[i])
-    agent.set_xdims((constants.lower[i][0], constants.upper[i][0]))
-    agent.set_ydims((constants.lower[i][1], constants.upper[i][1]))
-    agent.set_zdims((constants.lower[i][2], constants.upper[i][2]))
-    agent.load_mission_parameters(constants.mission_txt[i])
-    agent.generate_walkable_space()
-    path = agent.explore()
+def geo_test():
 
-    if not path:
-        print "No path was found!"
-        continue
+    ll, ul = -10, 10
 
-    # Setup a malmo client
-    agent_host = MalmoPython.AgentHost()
+    def rp():
+        return random.randint(ll, ul), random.randint(ll, ul), random.randint(ll, ul)
 
-    try:
-        agent_host.parse(sys.argv)
-    except RuntimeError as e:
-        print 'ERROR:', e
-        print agent_host.getUsage()
-        exit(1)
-    if agent_host.receivedArgument("help"):
-        print agent_host.getUsage()
-        exit(0)
 
-    my_mission = None
-    # Load in the mission
-    with open(constants.mission_xml[i], 'r') as f:
-        print "Loading mission from {0}".format(constants.mission_xml[i])
-        my_mission = MalmoPython.MissionSpec(f.read(), True)
-    my_mission_record = MalmoPython.MissionRecordSpec()
 
-    # Attempt to start a mission:
-    max_retries = 3
-    for retry in range(max_retries):
+
+def malmo_test():
+    for i in range(len(constants.mission_xml)):
+        # Create an agent and generate a path
+        agent = Agent()
+        agent.set_start(constants.start)
+        agent.set_goal(constants.goal[i])
+        agent.set_xdims((constants.lower[i][0], constants.upper[i][0]))
+        agent.set_ydims((constants.lower[i][1], constants.upper[i][1]))
+        agent.set_zdims((constants.lower[i][2], constants.upper[i][2]))
+        agent.set_step(18)
+        agent.load_mission_parameters(constants.mission_txt[i])
+        agent.generate_walkable_space()
+        path = agent.explore()
+
+        if not path:
+            print "No path was found!"
+            continue
+
+        # Setup a malmo client
+        agent_host = MalmoPython.AgentHost()
+
         try:
-            agent_host.startMission(my_mission, my_mission_record)
-            break
+            agent_host.parse(sys.argv)
         except RuntimeError as e:
-            if retry == max_retries - 1:
-                print "Error starting mission:", e
-                exit(1)
-            else:
-                time.sleep(2)
+            print 'ERROR:', e
+            print agent_host.getUsage()
+            exit(1)
+        if agent_host.receivedArgument("help"):
+            print agent_host.getUsage()
+            exit(0)
 
-    # Loop until mission starts:
-    print "Waiting for the mission to start ",
-    world_state = agent_host.getWorldState()
-    while not world_state.has_mission_begun:
-        sys.stdout.write(".")
-        time.sleep(1)
+        my_mission = None
+        # Load in the mission
+        with open(constants.mission_xml[i], 'r') as f:
+            print "Loading mission from {0}".format(constants.mission_xml[i])
+            my_mission = MalmoPython.MissionSpec(f.read(), True)
+        my_mission_record = MalmoPython.MissionRecordSpec()
+
+        # Attempt to start a mission:
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                agent_host.startMission(my_mission, my_mission_record)
+                break
+            except RuntimeError as e:
+                if retry == max_retries - 1:
+                    print "Error starting mission:", e
+                    exit(1)
+                else:
+                    time.sleep(2)
+
+        # Loop until mission starts:
+        print "Waiting for the mission to start ",
         world_state = agent_host.getWorldState()
-        for error in world_state.errors:
-            print "Error:", error.text
+        while not world_state.has_mission_begun:
+            sys.stdout.write(".")
+            time.sleep(1)
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print "Error:", error.text
 
-    print
-    print "Mission running ",
+        print
+        print "Mission running ",
 
-    # Needed to prevent skipped commands
-    time.sleep(3)
+        # Needed to prevent skipped commands
+        time.sleep(3)
 
-    while world_state.is_mission_running:
-        # Needed to transition between missions
-        world_state = agent_host.getWorldState()
+        while world_state.is_mission_running:
+            # Needed to transition between missions
+            world_state = agent_host.getWorldState()
 
-        # Guide the agent along the path
-        sys.stdout.write(".")
-        if path:
-            pos = path.pop()
-            agent_host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
-        time.sleep(.5)
+            # Guide the agent along the path
+            sys.stdout.write(".")
+            if path:
+                pos = path.pop()
+                agent_host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
+            time.sleep(.5)
 
-    print "Mission ended ",
-    print
+        print "Mission ended ",
+        print
+
+if __name__ == '__main__':
+    malmo_test()
