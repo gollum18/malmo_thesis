@@ -21,19 +21,17 @@
 				<DrawCuboid x1="-25" y1="55" z1="-25" x2="-25" y2="70" z2="25" type="obsidian"/>
 				<DrawCuboid x1="25" y1="55" z1="-25" x2="25" y2="70" z2="25" type="obsidian"/>
 
+				<DrawCuboid x1="-1" y1="55" z1="-24" x2="1" y2="55" z2="-24" type="air"/>
 				<DrawBlock x="0" y="54" z="-24" type="air"/>
-				<DrawBlock x="-1" y="55" z="-24" type="air"/>
-				<DrawBlock x="0" y="55" z="-24" type="air"/>
-				<DrawBlock x="1" y="55" z="-24" type="air"/>
 				<DrawBlock x="0" y="55" z="-23" type="air"/>
 
 				<DrawBlock x="0" y="53" z="-24" type="diamond_block"/>
 				<DrawBlock x="0" y="55" z="24" type="gold_block"/>
 
 				<DrawCuboid x1="-5" y1="53" z1="-5" x2="5" y2="60" z2="5" type="obsidian"/>
-				<DrawCuboid x1="-1" y1="53" z1="24" x2="-1" y2="57" z2="18" type="obsidian"/>
-				<DrawCuboid x1="1" y1="53" z1="24" x2="1" y2="57" z2="18" type="obsidian"/>
-				<DrawCuboid x1="0" y1="58" z1="24" x2="0" y2="58" z2="18" type="obsidian"/>
+				<DrawCuboid x1="-1" y1="53" z1="18" x2="-1" y2="57" z2="24" type="obsidian"/>
+				<DrawCuboid x1="1" y1="53" z1="18" x2="1" y2="57" z2="24" type="obsidian"/>
+				<DrawCuboid x1="0" y1="58" z1="18" x2="0" y2="58" z2="24" type="obsidian"/>
 			</DrawingDecorator>
 			<ServerQuitWhenAnyAgentFinishes/>
 		</ServerHandlers>

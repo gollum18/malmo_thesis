@@ -325,12 +325,12 @@ class Agent(object):
         :return: N/A
         """
         for obs in self.obstacles:
-            for x in range(obs[0], obs[1] + 1):
-                for z in range(obs[4], obs[5] + 1):
-                    if (not self.is_obstacle((x, obs[3] + 1, z)) and 
-                        not self.is_obstacle((x, obs[3] + 2, z))):
-                            if self.in_bounds((x+.5, obs[3]+1, z+.5)):
-                                self.add_walkable((x+.5, obs[3]+1, z+.5))
+            for x in range(obs[0], obs[1]):
+                for z in range(obs[4], obs[5]):
+                    if (not self.is_obstacle((x, obs[3] + 1, z)) and
+                            not self.is_obstacle((x, obs[3] + 2, z)) and
+                            self.in_bounds((x + .5, obs[3] + 1, z + .5))):
+                        self.add_walkable((x+.5, obs[3] + 1, z+.5))
 
     def interpolate(self, p1, p2, t):
         x = (1-t)*p1[0] + t*p2[0]
@@ -348,19 +348,6 @@ class Agent(object):
                 self.get_ymin() <= p[1] < self.get_ymax() and
                 self.get_zmin() <= p[2] < self.get_zmax())
 
-    def is_obstacle(self, p):
-        """
-        Determines if the specified point falls within an obstacle region.
-        :param p: The point to check.
-        :return: True if the point lies inside an obstacle, False otherwise.
-        """
-        for obs in self.obstacles:
-            if (obs[0] <= p[0] < obs[1] and 
-                obs[2] <= p[1] < obs[3] and
-                obs[4] <= p[2] < obs[5]):
-                return True
-        return False
-
     def is_goal(self, p):
         """
         Determines if the specified point is the goal.
@@ -369,6 +356,19 @@ class Agent(object):
         """
         # Simply call is same point, it essentially does what we want
         return self.is_same_point(p, self.goal, .05, .05, .05)
+
+    def is_obstacle(self, p):
+        """
+        Determines if the specified point falls within an obstacle region.
+        :param p: The point to check.
+        :return: True if the point lies inside an obstacle, False otherwise.
+        """
+        for obs in self.obstacles:
+            if (obs[0] <= p[0] < obs[1] and
+                obs[2] <= p[1] < obs[3] and
+                obs[4] <= p[2] < obs[5]):
+                return True
+        return False
 
     def is_walkable(self, p):
         """
@@ -398,6 +398,7 @@ class Agent(object):
         # This algorithm accounts for floating point error with 
         #   line_to and line_of_sight
         def isclose(a, b, rel_tol=1e-09, abs_tol=0.0):
+
             return abs(a - b) <= max(rel_tol * max(abs(a), abs(b)), abs_tol)
 
         return (isclose(p1[0], p2[0], xt) and
@@ -443,7 +444,7 @@ class Agent(object):
     def load_mission_parameters(self, filename):
         """
         Loads in geographical info about a mission from file.
-        :param fliename: The file that contains the information about the current mission.
+        :param filename: The file that contains the information about the current mission.
         :raise IOError: If the file specified does not exist.
         """
         # Attempt to open the file
@@ -453,19 +454,19 @@ class Agent(object):
             raise IOError("IOError: File {0} was not found".format(filename))
         # For each obstacle in the file
         for line in input_file.readlines():
-            # Skip comments
-            if "//" in line:
+            # Skip  empty lines and comments
+            if not line or "//" in line:
                 continue
             # Add the obstacle to the agents world state
-            parts = line.split()
-            self.add_obstacle((int(parts[0]), int(parts[1]), int(parts[2]),
-                               int(parts[3]), int(parts[4]), int(parts[5])))
+            rep = [int(part) for part in line.split()]
+            self.add_obstacle((rep[0], rep[1], rep[2],
+                               rep[3], rep[4], rep[5]))
         # Close the file to avoid corruption
         input_file.close()
 
     def nearest_walkable(self, p):
         """
-        Finds the nearest neighbor point to the passed in point.
+        Finds the nearest neighbor point to the passed in point that exists on the same level.
         :param p: The point to check.
         :return: THe closest point to p.
         """
@@ -549,6 +550,7 @@ class Agent(object):
         x, z = random.sample(space, 1)[0]
         return x, y, z
 
+
 def geo_test():
 
     ll, ul = -10, 10
@@ -557,10 +559,9 @@ def geo_test():
         return random.randint(ll, ul), random.randint(ll, ul), random.randint(ll, ul)
 
 
-
-
 def malmo_test():
     for i in range(len(constants.mission_xml)):
+    #for i in range(1):
         # Create an agent and generate a path
         agent = Agent()
         agent.set_start(constants.start)
@@ -568,13 +569,13 @@ def malmo_test():
         agent.set_xdims((constants.lower[i][0], constants.upper[i][0]))
         agent.set_ydims((constants.lower[i][1], constants.upper[i][1]))
         agent.set_zdims((constants.lower[i][2], constants.upper[i][2]))
-        agent.set_step(18)
+        agent.set_step(50)
         agent.load_mission_parameters(constants.mission_txt[i])
         agent.generate_walkable_space()
         path = agent.explore()
 
         if not path:
-            print "No path was found!"
+            print("No path was found!")
             continue
 
         # Setup a malmo client
@@ -583,17 +584,17 @@ def malmo_test():
         try:
             agent_host.parse(sys.argv)
         except RuntimeError as e:
-            print 'ERROR:', e
-            print agent_host.getUsage()
+            print('ERROR:', e)
+            print(agent_host.getUsage())
             exit(1)
         if agent_host.receivedArgument("help"):
-            print agent_host.getUsage()
+            print(agent_host.getUsage())
             exit(0)
 
         my_mission = None
         # Load in the mission
         with open(constants.mission_xml[i], 'r') as f:
-            print "Loading mission from {0}".format(constants.mission_xml[i])
+            print("Loading mission from {0}".format(constants.mission_xml[i]))
             my_mission = MalmoPython.MissionSpec(f.read(), True)
         my_mission_record = MalmoPython.MissionRecordSpec()
 
@@ -605,23 +606,25 @@ def malmo_test():
                 break
             except RuntimeError as e:
                 if retry == max_retries - 1:
-                    print "Error starting mission:", e
+                    print("Error starting mission:", e)
                     exit(1)
                 else:
                     time.sleep(2)
 
         # Loop until mission starts:
-        print "Waiting for the mission to start ",
+        print("Waiting for the mission to start ")
         world_state = agent_host.getWorldState()
         while not world_state.has_mission_begun:
             sys.stdout.write(".")
             time.sleep(1)
             world_state = agent_host.getWorldState()
             for error in world_state.errors:
-                print "Error:", error.text
+                print("Error:", error.text)
 
-        print
-        print "Mission running ",
+        print()
+        print("Mission running ")
+
+        print path
 
         # Needed to prevent skipped commands
         time.sleep(3)
@@ -637,8 +640,9 @@ def malmo_test():
                 agent_host.sendCommand("tp {0} {1} {2}".format(pos[0], pos[1], pos[2]))
             time.sleep(.5)
 
-        print "Mission ended ",
-        print
+        print("Mission ended ")
+        print()
+
 
 if __name__ == '__main__':
     malmo_test()

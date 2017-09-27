@@ -7,7 +7,8 @@ mission_txt = (
     # Drop to goal mission
     './missions/pp_maze_three.txt',
     # Climb the big central pillar
-    './missions/pp_maze_four.txt')
+    './missions/pp_maze_four.txt'
+)
 
 # Describes the mission itself in a way Malmo can interpret
 mission_xml = (
@@ -21,11 +22,11 @@ mission_xml = (
     './missions/pp_maze_four.xml'
 )
 
-lower = ((-25, 55, -25), (-25, 55, -25), (-25, 53, -25), (-25, 55, -25))
+lower = ((-25, 54, -25), (-25, 54, -25), (-25, 52, -25), (-25, 54, -25))
 upper = ((25, 70, 25), (25, 70, 25), (25, 70, 25), (25, 70, 25))
 
 start = (0.5, 56, 24.5)
-goal = ((0.5, 56, -24.5), (0.5, 58, -24.5), (0.5, 54, -24.5), (0.5, 61, 0.5))
+goal = ((0.5, 56, -24.5), (0.5, 58, -24.5), (0.5, 54, -24.5), (0.5, 56, 0.5))
 
 obstacle = 'obs'
 hazard = 'haz'
