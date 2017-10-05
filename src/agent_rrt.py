@@ -1,3 +1,8 @@
+# Name: agent_rrt.py
+# Since: 08/21/2017
+# Modified: 10/05/2017
+# Description: Defines an agent that traverses three dimensional space using a rapidly exploring random tree.
+
 from __future__ import division
 import MalmoPython
 import math
@@ -123,6 +128,10 @@ class Agent(object):
         return self.line_to(p, self.nearest_neighbor(space, self.goal))
 
     def explore(self):
+        """
+        Finds a path using a rapidly exploring random tree.
+        :return: A list containing the path, or [] if there is no path.
+        """
         nodes = []
         for i in range(self.max_nodes):
             r = self.uniform()
@@ -215,6 +224,11 @@ class Agent(object):
         return best
 
     def sample(self, p1):
+        """
+        Samples a point from walkable space using a probabilistic algorithm.
+        :param p1: A tuple (x, y, z).
+        :return: A tuple (x, y, z).
+        """
         p = random.random()
         if p > 1 - self.alpha:
             return self.line_to(p1, self.goal)
@@ -233,16 +247,34 @@ class Agent(object):
 class Node(object):
 
     def __init__(self, position, parent=None):
+        """
+        Creates an instance of a node object.
+        :param position: The position of this node.
+        :param parent: The parent of this node.
+        """
         self.position = position
         self.parent = parent
 
     def get_parent(self):
+        """
+        Gets the parent node of this node.
+        :return: A node object or None if it does not have a parent.
+        """
         return self.parent
 
     def get_position(self):
+        """
+        Gets the position of this node.
+        :return: A tuple (x, y, z).
+        """
         return self.position
 
     def set_position(self, position):
+        """
+        Sets the position of this node.
+        :param position: A tuple (x, y, z).
+        :return: N/A
+        """
         self.position = position
 
 class Obstacle(object):
@@ -250,6 +282,12 @@ class Obstacle(object):
     _obstacle_id = 0
 
     def __init__(self, xdims, ydims, zdims):
+        """
+        Creates an instance of an obstacle object.
+        :param xdims: The x dimensions of the object.
+        :param ydims: The y dimensions of the object.
+        :param zdims: The z dimensions of the object.
+        """
         self.xdims = xdims
         self.ydims = ydims
         self.zdims = zdims
@@ -257,33 +295,76 @@ class Obstacle(object):
         Obstacle._obstacle_id += 1
 
     def __eq__(self, other):
+        """
+        Determines if this obstacle is equal to another.
+        :param other: The other obstacle to compare against.
+        :return: True if the obstacles share the same obstacle ID, False otherwise.
+        """
         return self.obstacle_id == other.obstacle_id
 
     def __ne__(self, other):
+        """
+        Determines if this obstacle is not equal to another.
+        :param other: The other obstacle to compare against.
+        :return: True if the obstacles do not share the same obstacle ID, False otherwise.
+        """
         return not self.__eq__(other)
 
     def __hash__(self):
+        """
+        Creates a hash for this obstacle.
+        :return: An integer.
+        """
         return hash(self.obstacle_id)
 
     def get_xmin(self):
+        """
+        Gets the minimum x dimension of this obstacle.
+        :return: An integer.
+        """
         return min(self.xdims)
 
     def get_xmax(self):
+        """
+        Gets the maximum x dimension of this obstacle.
+        :return: An integer.
+        """
         return max(self.xdims)
 
     def get_ymin(self):
+        """
+        Gets the minimum y dimension of this obstacle.
+        :return: An integer.
+        """
         return min(self.ydims)
 
     def get_ymax(self):
+        """
+        Gets the maximum y dimension of this obstacle.
+        :return: An integer.
+        """
         return max(self.ydims)
 
     def get_zmin(self):
+        """
+        Gets the minimum z dimension of this obstacle.
+        :return: An integer.
+        """
         return min(self.zdims)
 
     def get_zmax(self):
+        """
+        Gets the maximum z dimenison of this obstacle.
+        :return: An integer.
+        """
         return max(self.zdims)
 
     def inside(self, p):
+        """
+        Determines if a point lies inside this obstacle.
+        :param p: A tuple (x, y, z).
+        :return: True if the point lies inside the obstacle, False otherwise.
+        """
         return (self.get_xmin() <= p[0] < self.get_xmax() and
                 self.get_ymin() <= p[1] < self.get_ymax() and
                 self.get_zmin() <= p[2] < self.get_zmax())
