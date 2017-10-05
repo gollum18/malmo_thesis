@@ -1,0 +1,8 @@
+/*
+    The parser will ignore classic C style block comments as well as
+        single line comments.
+    The parser will also ignore empty lines.
+    The normal order for this is to parse in obstacles first and then walkable space.
+        Each section is preceded by a number x | x >= 0 that indicates the number of obstacles and then walkable
+            space.
+*/

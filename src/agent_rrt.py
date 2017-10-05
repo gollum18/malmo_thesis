@@ -6,9 +6,20 @@
 from __future__ import division
 import MalmoPython
 import math
+import os
 import sys
 import time
 import random
+
+mission_files = ('./missions/pp_maze_one.xml',
+                 './missions/pp_maze_two.xml',
+                 './missions/pp_maze_three.xml',
+                 './missions/pp_maze_four.xml')
+mission_text_files = ('./missions/pp_maze_one_txt.txt',
+                      './missions/pp_maze_two_txt.txt',
+                      './missions/pp_maze_three_txt.txt',
+                      './missions/pp_maze_four_txt.txt')
+
 
 class Agent(object):
 
@@ -244,6 +255,7 @@ class Agent(object):
         """
         return random.sample(self.world.get_walkable() - self.traversed, 1)[0]
 
+
 class Node(object):
 
     def __init__(self, position, parent=None):
@@ -276,6 +288,7 @@ class Node(object):
         :return: N/A
         """
         self.position = position
+
 
 class Obstacle(object):
 
@@ -359,6 +372,30 @@ class Obstacle(object):
         """
         return max(self.zdims)
 
+    def set_xdims(self, xdims):
+        """
+        Sets the x dimensions of the world.
+        :param xdims: A tuple (min-x, max-x)
+        :return: N/A
+        """
+        self.xdims = xdims
+
+    def set_ydims(self, ydims):
+        """
+        Sets the y dimensions of the world.
+        :param ydims: A tuple (min-y, max-y)
+        :return: N/A
+        """
+        self.ydims = ydims
+
+    def set_zdims(self, zdims):
+        """
+        Sets the z dimensions of the world.
+        :param zdims: A tuple (min-z, max-z)
+        :return: N/A
+        """
+        self.zdims = zdims
+
     def inside(self, p):
         """
         Determines if a point lies inside this obstacle.
@@ -368,6 +405,7 @@ class Obstacle(object):
         return (self.get_xmin() <= p[0] < self.get_xmax() and
                 self.get_ymin() <= p[1] < self.get_ymax() and
                 self.get_zmin() <= p[2] < self.get_zmax())
+
 
 class World(object):
 
@@ -382,7 +420,7 @@ class World(object):
         self.ydims = ydims
         self.zdims = zdims
         self.obstacles = set()
-        self.walkable = {}
+        self.walkable = dict()
 
     def get_xmin(self):
         """
@@ -444,6 +482,14 @@ class World(object):
                 walkable.add((x, y, z))
         return walkable
 
+    def empty(self):
+        """
+        Clears this worlds obstacles and walkable space.
+        :return: N/A
+        """
+        self.obstacles.clear()
+        self.walkable.clear()
+
     def in_bounds(self, p):
         """
         Determines if a point is inside the world.
@@ -483,7 +529,67 @@ class World(object):
             return (p[0], p[2]) in self.walkable[p[1]]
         return False
 
+
 def malmo():
+    agent_host = MalmoPython.AgentHost()
+    try:
+        agent_host.parse(sys.argv)
+    except RuntimeError as e:
+        print 'ERROR', e
+        print agent_host.getUsage()
+        exit(1)
+    if agent_host.receivedArgument("help"):
+        print agent_host.getUsage()
+        exit(0)
+
+    for i in range(4):
+        # Setup the mission parameters
+        mission_file = mission_files[i]
+        mission_txt_file = mission_text_files[i]
+
+        with open(mission_file, 'r') as f:
+            print "Loading mission from %s" % mission_file
+            mission_xml = f.read()
+            my_mission = MalmoPython.MissionSpec(mission_xml, True)
+        my_mission_record = MalmoPython.MissionRecordSpec()
+
+        # Attempt to start the mission
+        max_retries = 3
+        for retry in range(max_retries):
+            try:
+                agent_host.startMission(my_mission, my_mission_record)
+            except RuntimeError as e:
+                if retry == max_retries - 1:
+                    print "Error starting mission:", e
+                    exit(1)
+                else:
+                    time.sleep(2)
+
+        # Loop until mission starts:
+        print "Waiting for the mission to start ",
+        world_state = agent_host.getWorldState()
+        while not world_state.has_mission_begun:
+            sys.stdout.write(".")
+            time.sleep(0.5)
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print "Error:", error.text
+
+        print
+        print "Mission running ",
+
+        # Loop until mission ends:
+        while world_state.is_mission_running:
+            sys.stdout.write(".")
+            time.sleep(0.5)
+            world_state = agent_host.getWorldState()
+            for error in world_state.errors:
+                print "Error:", error.text
+
+        print
+        print "Mission ended"
+        # Mission has ended.
+
     raise NotImplementedError
 
 if __name__ == '__main__':
