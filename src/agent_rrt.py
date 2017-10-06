@@ -6,10 +6,13 @@
 from __future__ import division
 import MalmoPython
 import math
-import os
 import sys
 import time
 import random
+
+#
+# Program Constants
+#
 
 mission_files = ('./missions/pp_maze_one.xml',
                  './missions/pp_maze_two.xml',
@@ -20,10 +23,13 @@ mission_text_files = ('./missions/pp_maze_one_txt.txt',
                       './missions/pp_maze_three_txt.txt',
                       './missions/pp_maze_four_txt.txt')
 
+#
+# Program Classes
+#
 
 class Agent(object):
 
-    def __init__(self, start, goal, alpha, beta, max_nodes, int_steps):
+    def __init__(self, start, goal, alpha=0.05, beta=3.25, max_nodes=5000, int_steps=50):
         """
         Creates an agent instance.
         :param start: The starting position of the agent.
@@ -85,20 +91,68 @@ class Agent(object):
 
     def create_world(self, xdims, ydims, zdims, filename):
         """
-
+        Initializes the world with obstacles and walkable space.
         :param xdims: The x dimensions of the world.
         :param ydims: The y dimensions of the world.
         :param zdims: The z dimensions of the world.
         :param filename: The name of the file containing all obstacles and walkable space.
         :return: N/A
         """
+
+        def generate_neighbors(p):
+            """
+            Generates all possible neighbors that are one (1) unit away from the given point p.
+            :param p: A tuple (x, y, z).
+            :return: A list containing all the neighbors of point p that have not already been seen or evaluated.
+            """
+            neighbors = []
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    for dz in [-1, 0, 1]:
+                        # Do not want the current location
+                        if dx == 0 and dy == 0 and dz == 0:
+                            continue
+                        n = p[0] + dx, p[1] + dy, p[2] + dz
+                        # Do not want locations already seen/evaluated
+                        if p in prospective or p in evaluated:
+                            continue
+                        # Do not want invalid locations (unreachable)
+                        if not self.world.is_valid(n):
+                            continue
+                        # Check to see if the point lies on an obstacle
+                        if self.world.is_traversable(n):
+                            neighbors.append(n)
+            return neighbors
+
         if not xdims or not ydims or not zdims or not filename:
             raise ValueError
         reader = open(filename, 'r')
         if not reader:
             raise IOError
-        # TODO: Parse in the information about the obstacles and walkable space.
-        raise NotImplementedError
+        # Read in obstacle information from file.
+        ignoring = False
+        for line in reader.readlines():
+            if line.startswith("/*") and not ignoring:
+                ignoring = True
+                continue
+            if line.endswith("*/") and ignoring:
+                ignoring = False
+                continue
+            if not ignoring:
+                if line.startswith("//") or not line:
+                    continue
+                parts = [int(part) for part in line.split()]
+                self.world.add_obstacle()
+        reader.close()
+        # Begin flood filling from the start to initialize walkable space.
+        prospective = [self.start]
+        evaluated = set()
+        while prospective:
+            current = prospective.pop(0)
+            for neighbor in generate_neighbors(current):
+                prospective.append(neighbor)
+            evaluated.add(current)
+            self.world.add_walkable(current)
 
     @staticmethod
     def distance(p1, p2):
@@ -406,6 +460,16 @@ class Obstacle(object):
                 self.get_ymin() <= p[1] < self.get_ymax() and
                 self.get_zmin() <= p[2] < self.get_zmax())
 
+    def ontop(self, p):
+        """
+        Determines if a point is on top of the obstacle or not.
+        :param p: A tuple (x, y, z).
+        :return: True if the point is on top of the obstacle, False otherwise.
+        """
+        return (self.get_xmin() <= p[0] < self.get_xmax() and
+                p[1] == self.get_ymax() and
+                self.get_zmin() <= p[2] < self.get_zmax())
+
 
 class World(object):
 
@@ -482,6 +546,28 @@ class World(object):
                 walkable.add((x, y, z))
         return walkable
 
+    def add_obstacle(self, xdims, ydims, zdims):
+        """
+        Adds an obstacle to the world.
+        :param xdims: A tuple (min-x, max-x).
+        :param ydims: A tuple (min-y, max-y).
+        :param zdims: A tuple (min-z, max-z).
+        :return: N/A
+        """
+        self.obstacles.add(Obstacle(xdims, ydims, zdims))
+
+    def add_walkable(self, p):
+        """
+        Adds a walkable point to the world.
+        :param p: A tuple (x, y, z).
+        :return: N/A
+        """
+        if p[1] in self.walkable.keys():
+            self.walkable[p[1]].add((p[0], p[2]))
+        else:
+            self.walkable[p[1]] = set()
+            self.walkable[p[1]].add((p[0], p[2]))
+
     def empty(self):
         """
         Clears this worlds obstacles and walkable space.
@@ -519,19 +605,32 @@ class World(object):
         """
         return self.in_bounds(p) and not self.is_blocked(p)
 
-    def is_walkable(self, p):
+    def is_traversable(self, p):
         """
-        Determines whether a point is walkable.
+        Determines whether a point can be traversed or not. This is distinct from is_walkalbe as this checks whether
+            a point falls on top of an obstacle or not.
         :param p: A tuple (x, y, z).
-        :return: True if the point is valid, False otherwise.
+        :return: True if the point is traversable, False otherwise.
         """
-        if p[1] in self.walkable.keys():
-            return (p[0], p[2]) in self.walkable[p[1]]
+        for obstacle in self.obstacles:
+            if obstacle.ontop(p):
+                return True
         return False
 
+    def is_walkable(self, p):
+        """
+        Determines if a point is walkable or not.
+        :param p: A tuple (x, y, z).
+        :return: True if the point is walkable, False otherwise.
+        """
+        if p[1] in self.walkable.keys():
+            if (p[0], p[2]) in self.walkable[p[1]]:
+                return True
+        return False
 
 def malmo():
     agent_host = MalmoPython.AgentHost()
+    agent = Agent()
     try:
         agent_host.parse(sys.argv)
     except RuntimeError as e:
