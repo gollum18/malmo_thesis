@@ -5,10 +5,12 @@
 
 from __future__ import division
 import MalmoPython
+import json
 import math
 import sys
 import time
 import random
+from Queue import PriorityQueue
 
 #
 # Program Constants
@@ -18,10 +20,14 @@ mission_files = ('./missions/pp_maze_one.xml',
                  './missions/pp_maze_two.xml',
                  './missions/pp_maze_three.xml',
                  './missions/pp_maze_four.xml')
-mission_text_files = ('./missions/pp_maze_one_txt.txt',
-                      './missions/pp_maze_two_txt.txt',
-                      './missions/pp_maze_three_txt.txt',
-                      './missions/pp_maze_four_txt.txt')
+mission_text_files = ('./missions/pp_maze_one.txt',
+                      './missions/pp_maze_two.txt',
+                      './missions/pp_maze_three.txt',
+                      './missions/pp_maze_four.txt')
+mission_lower_bounds = ((-24, 55, -24), (-24, 55, -24), (-25, 53, -24), (-24, 55, -24))
+mission_upper_bounds = ((26, 70, 25), (25, 70, 25), (25, 70, 25), (25, 70, 25))
+mission_start = (0.5, 56, 24.5)
+mission_goal = ((0.5, 56, -23.5), (0.5, 58, -23.5), (0.5, 54, -23.5), (0.5, 56, 0.5))
 
 #
 # Program Classes
@@ -29,7 +35,8 @@ mission_text_files = ('./missions/pp_maze_one_txt.txt',
 
 class Agent(object):
 
-    def __init__(self, start, goal, alpha=0.05, beta=3.25, max_nodes=5000, int_steps=50):
+    def __init__(self, start, goal, alpha=0.05, beta=3.25, max_nodes=5000, int_steps=50,
+                 rewire_time = .25):
         """
         Creates an agent instance.
         :param start: The starting position of the agent.
@@ -44,6 +51,7 @@ class Agent(object):
         self.beta = beta
         self.max_nodes = max_nodes
         self.int_steps = int_steps
+        self.rewire_time = rewire_time
         self.world = None
         self.traversed = set()
 
@@ -98,40 +106,17 @@ class Agent(object):
         :param filename: The name of the file containing all obstacles and walkable space.
         :return: N/A
         """
-
-        def generate_neighbors(p):
-            """
-            Generates all possible neighbors that are one (1) unit away from the given point p.
-            :param p: A tuple (x, y, z).
-            :return: A list containing all the neighbors of point p that have not already been seen or evaluated.
-            """
-            neighbors = []
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    for dz in [-1, 0, 1]:
-                        # Do not want the current location
-                        if dx == 0 and dy == 0 and dz == 0:
-                            continue
-                        n = p[0] + dx, p[1] + dy, p[2] + dz
-                        # Do not want locations already seen/evaluated
-                        if p in prospective or p in evaluated:
-                            continue
-                        # Do not want invalid locations (unreachable)
-                        if not self.world.is_valid(n):
-                            continue
-                        # Check to see if the point lies on an obstacle
-                        if self.world.is_traversable(n):
-                            neighbors.append(n)
-            return neighbors
-
         if not xdims or not ydims or not zdims or not filename:
             raise ValueError
         reader = open(filename, 'r')
         if not reader:
             raise IOError
+        # Create a world state
+        self.world = World(xdims, ydims, zdims)
         # Read in obstacle information from file.
         ignoring = False
         for line in reader.readlines():
+            line = line.strip("\n")
             if line.startswith("/*") and not ignoring:
                 ignoring = True
                 continue
@@ -142,14 +127,16 @@ class Agent(object):
                 if line.startswith("//") or not line:
                     continue
                 parts = [int(part) for part in line.split()]
-                self.world.add_obstacle()
+                self.world.add_obstacle((parts[0], parts[1]), (parts[2], parts[3]), (parts[4], parts[5]))
         reader.close()
         # Begin flood filling from the start to initialize walkable space.
         prospective = [self.start]
         evaluated = set()
         while prospective:
             current = prospective.pop(0)
-            for neighbor in generate_neighbors(current):
+            for neighbor in self.generate_neighbors(current):
+                if neighbor in prospective or neighbor in evaluated:
+                    continue
                 prospective.append(neighbor)
             evaluated.add(current)
             self.world.add_walkable(current)
@@ -157,14 +144,79 @@ class Agent(object):
     @staticmethod
     def distance(p1, p2):
         """
-        Calculates the distance between two points in euclidean three space.
-        :param p1: A tuple (x, y, z).
-        :param p2: A tuple (x, y, z).
-        :return: The euclidean distance between p1 and p2.
+        Calculates the distance between two points in either 2D or 3D.
+        :param p1: A tuple (x, y) or a tuple (x, y, z).
+        :param p2: A tuple (x, y) or a tuple (x, y, z).
+        :return: The distance between the two points.
         """
-        return math.sqrt(((p2[0] - p1[0]) * (p2[0] - p1[0])) +
-                         ((p2[1] - p1[1]) * (p2[1] - p1[1])) +
-                         ((p2[2] - p1[2]) * (p2[2] - p1[2])))
+        def dist2(p1, p2):
+            """
+            Calculates the distance between two points in either 2D.
+            :param p1: A tuple (x, y).
+            :param p2: A tuple (x, y).
+            :return:
+            """
+            return math.sqrt(
+                (p1[0] - p2[0]) * (p1[0] - p2[0]) +
+                (p1[1] - p2[1]) * (p1[1] - p2[1]))
+
+        def dist3(p1, p2):
+            """
+            Calculates the distance between two points in either 3D.
+            :param p1: A tuple (x, y, z).
+            :param p2: A tuple (x, y, z).
+            :return:
+            """
+            return math.sqrt(
+                (p1[0] - p2[0]) * (p1[0] - p2[0]) +
+                (p1[1] - p2[1]) * (p1[1] - p2[1]) +
+                (p1[2] - p2[2]) * (p1[2] - p2[2]))
+
+        if len(p1) == 2 and len(p2) == 2:
+            return dist2(p1, p2)
+        elif len(p1) == 3 and len(p2) == 3:
+            return dist3(p1, p2)
+        else:
+            raise ValueError
+
+    @staticmethod
+    def midpoint(p1, p2):
+        """
+        Determines all of the points that lie on the line defined by p1 and p2 using the midpoint formula.
+        :param p1: A tuple (x, y) or a tuple (x, y, z).
+        :param p2: A tuple (x, y) or a tuple (x, y, z).
+        :return:
+        """
+        def midpoint2(p1, p2):
+            """
+            Determines all of the points that lie on the line defined by p1 and p2 using the midpoint formula.
+            :param p1: A tuple (x, y).
+            :param p2: A tuple (x, y).
+            :return:
+            """
+            if Agent.distance(p1, p2) <= 1:
+                return []
+            m = ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
+            return [m] + midpoint2(p1, m) + midpoint2(m, p2)
+
+        def midpoint3(p1, p2):
+            """
+            Determines all of the points that lie on the line defined by p1 and p2 using the midpoint formula.
+            :param p1: A tuple (x, y, z).
+            :param p2: A tuple (x, y, z).
+            :return:
+            """
+            if Agent.distance(p1, p2) <= 1:
+                return []
+            m = ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2, (p1[2] + p2[2]) / 2)
+            return [m] + midpoint3(p1, m) + midpoint3(m, p2)
+
+        if len(p1) == 2 and len(p2) == 2:
+            return midpoint2(p1, p2)
+        elif len(p1) == 3 and len(p2) == 3:
+            return midpoint3(p1, p2)
+        else:
+            raise ValueError
 
     def ellipsoid(self, p, xr=3.0, yr=3.0, zr=3.0):
         """
@@ -186,33 +238,85 @@ class Agent(object):
             return (((x-p[0])/xr)*((x-p[0])/xr) +
                     ((y-p[1])/yr)*((y-p[1])/yr) +
                     ((z-p[2])/zr)*((z-p[2])/zr)) < 1
-        space = []
-        for p in self.world.get_walkable():
+        space = set()
+        for p in self.world.get_walkables():
             if inside(*p):
-                space.append(p)
-        return self.line_to(p, self.nearest_neighbor(space, self.goal))
+                space.add(p)
+        # Get the point inside the ellipsoid that is closest to the goal
+        p = None
+        d = float("inf")
+        for pt in space - self.traversed:
+            t = self.distance(pt, self.goal)
+            if t < d:
+                p = pt
+                d = t
+        return p
 
-    def explore(self):
+    def explore_astar(self):
+        """
+        Explores the search space using A* search.
+        :return: A list containing the path, or [] if there is no path.
+        """
+        prospective = PriorityQueue()
+        prospective.put_nowait((0.0, Node(self.start)))
+        evaluated = set()
+        while not prospective.empty():
+            current = prospective.get_nowait()[1]
+            if self.is_goal(current.get_position()):
+                return self.reconstruct_path(current)
+            if current.get_position() not in evaluated:
+                for neighbor in self.generate_neighbors(current.get_position()):
+                    # TODO: Finish implementing A*
+                    raise NotImplementedError
+        return []
+
+    def explore_rrt(self):
         """
         Finds a path using a rapidly exploring random tree.
         :return: A list containing the path, or [] if there is no path.
         """
-        nodes = []
+        # Come up with the tree algorithm for this
+        nodes = [Node(self.start)]
         for i in range(self.max_nodes):
-            r = self.uniform()
+            # Shamelessly borrowed from Steven M. Lavalles Implementation of RRT
+            rand = self.uniform()
             nn = nodes[0]
-            for p in nodes:
-                if self.distance(p.get_position(), r) < self.distance(nn.get_position, r):
-                    nn = p
-            nodes.append(Node(self.sample(nn.get_position()), nn))
-            if self.is_goal(nodes[-1]):
-                path = []
-                current = nodes[-1]
-                while current.get_parent():
-                    path.append(current.get_position())
-                    current = current.get_parent()
-                return path
+            for node in nodes:
+                if self.distance(node.get_position(), rand) < self.distance(nn.get_position(), rand):
+                    nn = node
+            nodes.append(Node(self.sample(nn.get_position(), rand), nn))
+            self.traversed.add(nodes[-1].get_position())
+            #print nodes[-1].get_position(), " == ",  self.goal, " is: ", self.is_goal(nodes[-1].get_position())
+            if self.is_goal(nodes[-1].get_position()):
+                return self.reconstruct_path(nodes[-1])
         return []
+
+    def generate_neighbors(self, p):
+        """
+        Generates all possible neighbors that are one (1) unit away from the given point p.
+        :param p: A tuple (x, y, z).
+        :return: A list containing all the neighbors of point p that have not already been seen or evaluated.
+        """
+        neighbors = []
+        for dx in [-1, 0, 1]:
+            for dy in [-1, 0, 1]:
+                for dz in [-1, 0, 1]:
+                    # Do not want the current location
+                    if dx == 0 and dy == 0 and dz == 0:
+                        continue
+                    n = p[0] + dx, p[1] + dy, p[2] + dz
+                    # Check to see if the point lies on an obstacle
+                    if self.world.is_traversable(n):
+                        neighbors.append(n)
+        return neighbors
+
+    def heuristic(self, p):
+        """
+        Calculates the three-dimensional taxi cab distance between the specified point and the goal.
+        :param p:
+        :return:
+        """
+        return math.fabs(self.goal[0] - p[0]) + math.fabs(self.goal[1] - p[1]) + math.fabs(self.goal[2] - p[2])
 
     @staticmethod
     def interpolate(p1, p2, t, r=False):
@@ -224,10 +328,10 @@ class Agent(object):
         :param r: A boolean indicating whether to floor the y coordinate.
         :return: A point (x, y, z). Note: y will be floored if r is True.
         """
-        x = (1 - t) * (p1[0] + (t * p2[0]))
-        y = (1 - t) * (p1[1] + (t * p2[1]))
-        z = (1 - t) * (p1[2] + (t * p2[2]))
-        return (x, y, z) if not r else (x, math.floor(y), z)
+        x = p1[0] + (p2[0] - p1[0]) * t
+        y = p1[1] + (p2[1] - p1[1]) * t
+        z = p1[2] + (p2[2] - p1[2]) * t
+        return (x, y, z) if not r else (x, math.ceil(y), z)
 
     def is_goal(self, p):
         """
@@ -237,7 +341,7 @@ class Agent(object):
         """
         return (self.goal[0] - .5 <= p[0] < self.goal[0] + .5 and
                 self.goal[1] == p[1] and
-                self.goal[2] - .5 <= p[0] < self.goal[2] + .5)
+                self.goal[2] - .5 <= p[2] < self.goal[2] + .5)
 
     def line_of_sight(self, p1, p2):
         """
@@ -261,58 +365,54 @@ class Agent(object):
         :param p2: A tuple (x, y, z).
         :return: A tuple (x, y, z).
         """
-        t = 0
+        # Intialize a sample space
+        t = 1
         space = set()
         space.add(p1)
-        while t < self.int_steps:
-            p3 = self.interpolate(p1, p2, t / self.int_steps, True)
+        # Take the initial step
+        p3 = self.interpolate(p1, p2, t / self.int_steps, True)
+        # While there are still steps left and we are still in bounds and not in an obstacle...
+        while t < self.int_steps and not self.world.is_valid(p3):
+            # Determine the new point
+            t += 1
             if self.world.is_walkable(p3):
                 space.add(p3)
-            t += 1
+            p3 = self.interpolate(p1, p2, t / self.int_steps, True)
         space.add(p2)
         return random.sample(space - self.traversed, 1)[0]
 
-    def nearest_neighbor(self, nodes, p):
+    def reconstruct_path(self, node):
         """
-        Finds the nearest neighbor amongst the collection of nodes to point p.
-        :param nodes: An iterable containing tuples (x, y, z).
-        :param p: A tuple (x, y, z).
-        :return: The point closest to p amongst all the points in nodes.
+        Reconstructs a path from a node.
+        :param node: The reached goal node.
+        :return: The path from the start node to the goal node.
         """
-        v = self.distance(nodes[0], p)
-        best = nodes[0]
-        for node in nodes[1:-1]:
-            temp = self.distance(node, p)
-            if temp < v:
-                v = temp
-                best = node
-        return best
+        path = []
+        while node.get_parent():
+            path.append(node.get_position())
+            node = node.get_parent()
+        return path
 
-    def sample(self, p1):
-        """
-        Samples a point from walkable space using a probabilistic algorithm.
-        :param p1: A tuple (x, y, z).
-        :return: A tuple (x, y, z).
-        """
+    def sample(self, p1, p2):
         p = random.random()
-        if p > 1 - self.alpha:
-            return self.line_to(p1, self.goal)
-        elif p < (1 - self.alpha)/self.beta or not self.line_of_sight(p1, self.goal):
+        if p > 1-self.alpha:
+            return self.line_to(p1, p2)
+        elif p <= (1-self.alpha)/self.beta or not self.line_of_sight(p1, p2):
             return self.uniform()
         else:
-            return self.ellipsoid(p1)
+            return self.ellipsoid(p1, 3.0, 1.25, 3.0)
 
     def uniform(self):
         """
         Uniformly samples a point from walkable space.
         :return: A tuple (x, y, z).
         """
-        return random.sample(self.world.get_walkable() - self.traversed, 1)[0]
+        return random.sample(self.world.get_walkables() - self.traversed, 1)[0]
 
 
 class Node(object):
 
-    def __init__(self, position, parent=None):
+    def __init__(self, position, parent=None, fscore=0.0, gscore=0.0, hscore=0.0):
         """
         Creates an instance of a node object.
         :param position: The position of this node.
@@ -320,6 +420,9 @@ class Node(object):
         """
         self.position = position
         self.parent = parent
+        self.fscore = fscore
+        self.gscore = gscore
+        self.hscore = hscore
 
     def get_parent(self):
         """
@@ -343,6 +446,50 @@ class Node(object):
         """
         self.position = position
 
+    def get_fscore(self):
+        """
+        Gets the fscore of this node.
+        :return: A float.
+        """
+        return self.fscore
+
+    def set_fscore(self, score):
+        """
+        Sets the fscore for this node.
+        :param score:
+        :return: N/A
+        """
+        self.fscore = score
+
+    def get_gscore(self):
+        """
+        Gets the gscore of this node.
+        :return: A float.
+        """
+        return self.gscore
+
+    def set_gscore(self, score):
+        """
+        Sets the gscore for this node.
+        :param score:
+        :return: N/A
+        """
+        self.gscore = score
+
+    def get_hscore(self):
+        """
+        Gets the hscore of this node.
+        :return: A float.
+        """
+        return self.hscore
+
+    def set_hscore(self, score):
+        """
+        Sets the hscore for this node.
+        :param score: The new hscore for this node.
+        :return: N/A
+        """
+        self.hscore = score
 
 class Obstacle(object):
 
@@ -470,6 +617,16 @@ class Obstacle(object):
                 p[1] == self.get_ymax() and
                 self.get_zmin() <= p[2] < self.get_zmax())
 
+class StopWatch(object):
+
+    def __innit__(self):
+        self.current = time.time()
+
+    def elapsed(self):
+        return time.time() - self.current
+
+    def reset(self):
+        self.current = time.time()
 
 class World(object):
 
@@ -628,35 +785,41 @@ class World(object):
                 return True
         return False
 
+
 def malmo():
+    # Create default Malmo objects:
     agent_host = MalmoPython.AgentHost()
-    agent = Agent()
+
     try:
         agent_host.parse(sys.argv)
     except RuntimeError as e:
-        print 'ERROR', e
+        print 'ERROR:', e
         print agent_host.getUsage()
         exit(1)
     if agent_host.receivedArgument("help"):
         print agent_host.getUsage()
         exit(0)
 
-    for i in range(4):
-        # Setup the mission parameters
-        mission_file = mission_files[i]
-        mission_txt_file = mission_text_files[i]
+    if agent_host.receivedArgument("test"):
+        num_repeats = 1
+    else:
+        num_repeats = 10
 
-        with open(mission_file, 'r') as f:
-            print "Loading mission from %s" % mission_file
-            mission_xml = f.read()
-            my_mission = MalmoPython.MissionSpec(mission_xml, True)
-        my_mission_record = MalmoPython.MissionRecordSpec()
+    for i in range(len(mission_files)):
+        # Attempt to start a mission:
+        my_mission = MalmoPython.MissionSpec(open(mission_files[i], 'r').read(), False)
+        planner = Agent(mission_start, mission_goal[i])
+        planner.create_world((mission_lower_bounds[i][0], mission_upper_bounds[i][0]),
+                             (mission_lower_bounds[i][1], mission_upper_bounds[i][1]),
+                             (mission_lower_bounds[i][2], mission_upper_bounds[i][2]),
+                             mission_text_files[i])
+        path = planner.explore()
 
-        # Attempt to start the mission
         max_retries = 3
         for retry in range(max_retries):
             try:
-                agent_host.startMission(my_mission, my_mission_record)
+                agent_host.startMission(my_mission, MalmoPython.MissionRecordSpec())
+                break
             except RuntimeError as e:
                 if retry == max_retries - 1:
                     print "Error starting mission:", e
@@ -669,7 +832,7 @@ def malmo():
         world_state = agent_host.getWorldState()
         while not world_state.has_mission_begun:
             sys.stdout.write(".")
-            time.sleep(0.5)
+            time.sleep(0.1)
             world_state = agent_host.getWorldState()
             for error in world_state.errors:
                 print "Error:", error.text
@@ -680,16 +843,19 @@ def malmo():
         # Loop until mission ends:
         while world_state.is_mission_running:
             sys.stdout.write(".")
-            time.sleep(0.5)
+            time.sleep(0.1)
             world_state = agent_host.getWorldState()
-            for error in world_state.errors:
-                print "Error:", error.text
+            if path:
+                position = path.pop()
+                agent_host.sendCommand("tp {0} {1} {2}".format(*position))
 
         print
         print "Mission ended"
         # Mission has ended.
 
-    raise NotImplementedError
+        #msg = world_state.observations[-1].text
+        #obs = json.loads(msg)
+        #print obs.get(u'XPos'), obs.get(u'YPos'), obs.get(u'ZPos')
 
 if __name__ == '__main__':
     malmo()

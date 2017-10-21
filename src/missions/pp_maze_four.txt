@@ -2,7 +2,49 @@
     The parser will ignore classic C style block comments as well as
         single line comments.
     The parser will also ignore empty lines.
-    The normal order for this is to parse in obstacles first and then walkable space.
-        Each section is preceded by a number x | x >= 0 that indicates the number of obstacles and then walkable
-            space.
+    Obstacles should be in the form (x1 x2 y1 y2 z1 z2)
 */
+// The Walls
+-25 26 55 71 -25 -26
+-25 26 55 71 25 26
+-25 -24 55 71 -25 26
+25 26 55 71 -25 26
+// The Floor
+-25 26 55 56 -25 26
+// The Outer Ring (First)
+-5 6 55 61 -5 4
+-5 6 55 61 5 6
+-5 -4 55 61 -4 5
+5 6 55 61 -4 5
+// The Second Ring
+-4 5 55 60 -4 -3
+-4 5 55 60 4 5
+-4 -3 55 60 -3 4
+4 5 55 60 -3 4
+// The Third Ring
+-3 4 55 59 -3 -2
+-3 4 55 59 3 4
+-3 -2 55 59 -2 3
+3 4 55 59 -2 3
+// The Fourth Ring
+-2 3 55 58 -2 -1
+-2 3 55 58 2 3
+-2 -1 55 58 -1 2
+2 3 55 58 -1 2
+// The Inner Ring (Last)
+-1 2 55 57 -1 0
+-1 2 55 57 1 2
+-1 0 55 57 0 1
+1 2 55 57 0 1
+// The Path Up The Obstacle
+5 8 60 61 0 1
+-7 -4 60 61 0 1
+8 9 59 60 1 8
+-8 -7 59 60 1 8
+-7 8 58 59 8 9
+0 1 57 58 9 10
+0 1 56 57 10 11
+// The Starting Enclosure
+-1 0 55 58 18 25
+1 2 55 58 18 25
+0 1 58 59 18 25
