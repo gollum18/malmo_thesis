@@ -151,13 +151,7 @@ class Agent(object):
         :param n2: The destination node.
         :return: The cost of moving from the source nde to the destination node.
         """
-        # TODO: This may need some work to get it to work correctly
-        #
-        #
-        dy = abs(n1.get_position()[1] - n2.get_position()[1])
-        if dy == 0:
-            return 0
-        return 1/dy
+        return 1 + math.fabs(n1.get_position()[1]-n2.get_position()[1])
 
     @staticmethod
     def distance(p1, p2):
@@ -399,7 +393,6 @@ class Agent(object):
         while node.get_parent():
             path.append(node.get_position())
             node = node.get_parent()
-        path.reverse()
         return path
 
     def sample(self, p1, p2):
@@ -829,7 +822,6 @@ def malmo():
                              mission_text_files[i])
         path = planner.explore_rrt()
         print path
-        break
 
         max_retries = 3
         for retry in range(max_retries):
