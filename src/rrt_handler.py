@@ -22,6 +22,8 @@ _mission_goal = ((0.5, 56, -23.5), (0.5, 58, -23.5), (0.5, 54, -23.5), (0.5, 56,
 # Needed by the neighbor generation algorithm
 _diff = [-1, 0, 1]
 
+# Switches for debuggins
+_debug_paths = False
 
 def cost(p1, p2):
     """
@@ -190,7 +192,7 @@ class Agent(object):
                         continue
                     node = Node(neighbor, current)
                     node.set_gscore(current.get_gscore() + cost(current.get_position(), node.get_position()))
-                    open_list.push(node, node.get_gscore() + heuristic(current.get_position(), node.get_position()))
+                    open_list.push(node, node.get_gscore() + heuristic(node.get_position(), self.goal))
                 closed_list.add(current.get_position())
         return []
 
@@ -296,8 +298,8 @@ class Agent(object):
             if dist(q, r) < 1.0:
                 return []
             else:
-                m = (p1[0]+p2[0])/2, (p1[1]+p2[1])/2, (p1[2]+p2[2])/2
-                return points_on_line(p1, m) + [m] + points_on_line(m, p2)
+                m = (q[0]+r[0])/2, (q[1]+r[1])/2, (q[2]+r[2])/2
+                return points_on_line(q, m) + [m] + points_on_line(m, r)
 
         for point in points_on_line(p1, p2):
             for obs in self.world.obstacles:
@@ -701,8 +703,20 @@ def malmo():
                              (_mission_lower_bounds[i][1], _mission_upper_bounds[i][1]),
                              (_mission_lower_bounds[i][2], _mission_upper_bounds[i][2]),
                              _mission_text_files[i])
-        path = planner.astar()
-        print(path)
+        path = planner.rrt()
+
+        if _debug_paths:
+            w = dict()
+            for point in planner.world.walkable:
+                if point[1] in w.keys():
+                    w[point[1]].add((point[0], point[2]))
+                else:
+                    w[point[1]] = set()
+                    w[point[1]].add((point[0], point[2]))
+            print(path)
+
+        # Comment this out when actually testing with the Malmo platform
+        #continue
 
         max_retries = 3
         for retry in range(max_retries):
