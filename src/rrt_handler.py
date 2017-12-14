@@ -1,6 +1,8 @@
 import MalmoPython
-import math, time, sys, random
+import math, time, sys, random, numpy
 from util import PriorityQueue
+from multiprocessing import Pool
+from multiprocessing.dummy import Pool as ThreadPool
 
 #
 # Program Constants
@@ -22,8 +24,16 @@ _mission_goal = ((0.5, 56, -23.5), (0.5, 58, -23.5), (0.5, 54, -23.5), (0.5, 56,
 # Needed by the neighbor generation algorithm
 _diff = [-1, 0, 1]
 
-# Switches for debuggins
+# Switches for debugging
+_visualize = False
 _debug_paths = False
+
+# Data Flags
+_hchanges = 0
+_runtime = 1
+_pathlength = 2
+_degrees = 3
+
 
 def cost(p1, p2):
     """
@@ -33,6 +43,17 @@ def cost(p1, p2):
     :return: The cost of going from p1 to p2.
     """
     return 1 + math.fabs(p2[1] - p1[1])
+
+
+def degree_change(v1, v2):
+    """
+    Calculates the change ni angle between two vectors in space.
+    :param v1: The first vector.
+    :param v2: The second vector.
+    :return: The angle of change between the two vectors in degrees.
+    """
+    return numpy.arccos(numpy.dot(v1, v2) /
+                        (numpy.linalg.norm(v1)*numpy.linalg.norm(v2)))
 
 
 def dist(p1, p2):
@@ -59,6 +80,19 @@ def heuristic(p1, p2):
     dy = math.fabs(p2[1] - p1[1])
     dz = math.fabs(p2[2] - p1[2])
     return dx * 1.0 + dy * 1.5 + dz * 1.0
+
+
+def reconstruct_path(n):
+    """
+    Constructs a path from a goal node.
+    :param n: The goal node that was found by a planning algorithm.
+    :return: A list containing the path.
+    """
+    path = []
+    while n.get_parent():
+        path.append(n.get_position())
+        n = n.get_parent()
+    return path
 
 
 class Agent(object):
@@ -185,7 +219,7 @@ class Agent(object):
         while not open_list.isEmpty():
             current = open_list.pop()
             if self.is_goal(current.get_position()):
-                return self.reconstruct_path(current)
+                return reconstruct_path(current)
             if current.get_position() not in closed_list:
                 for neighbor in self.generate_neighbors(current.get_position()):
                     if neighbor not in self.world.walkable:
@@ -195,6 +229,16 @@ class Agent(object):
                     open_list.push(node, node.get_gscore() + heuristic(node.get_position(), self.goal))
                 closed_list.add(current.get_position())
         return []
+
+    def clear(self):
+        """
+        Prepares the agent for deletion.
+        :return: N/A
+        """
+        self.traversed.clear()
+        self.world.clear()
+        del self.traversed
+        del self.world
 
     def create_world(self, xdims, ydims, zdims, filename):
         """
@@ -239,7 +283,6 @@ class Agent(object):
                 prospective.append(neighbor)
             evaluated.add(current)
             self.world.add_walkable_space(current)
-        print()
 
     def ellipsoid(self, p, xr=7.0, yr=3.0, zr=7.0):
         """
@@ -348,18 +391,6 @@ class Agent(object):
         """
         return random.sample(self.world.walkable - self.traversed, 1)[0]
 
-    def reconstruct_path(self, n):
-        """
-        Constructs a path from a goal node.
-        :param n: The goal node that was found by a planning algorithm.
-        :return: A list containing the path.
-        """
-        path = []
-        while n.get_parent():
-            path.append(n.get_position())
-            n = n.get_parent()
-        return path
-
     def rrt(self):
         """
         Finds a path in the world using a rapidly exploring random tree.
@@ -377,7 +408,7 @@ class Agent(object):
             nodes.append(Node(newnode, nn))
             self.traversed.add(newnode)
             if self.is_goal(nodes[-1].get_position()):
-                return self.reconstruct_path(nodes[-1])
+                return reconstruct_path(nodes[-1])
 
         return []
 
@@ -625,6 +656,16 @@ class World(Cube):
         """
         self.walkable.add(p)
 
+    def clear(self):
+        """
+        Clears the world object and prepares it for deletion.
+        :return: N/A
+        """
+        self.obstacles.clear()
+        self.walkable.clear()
+        del self.obstacles
+        del self.walkable
+
     def is_point_blocked(self, p):
         """
         Determines if the point is blocked or not.
@@ -676,7 +717,78 @@ class World(Cube):
         """
         return self.player_inside(p) and self.is_on_obstacle(p) and not self.is_player_blocked(p, height)
 
-def malmo():
+
+def gather_data(iterations=1000):
+    """
+    Gathers data on the pathfinding algorithms.
+    :param iterations: The sample size.
+    :return: N/A
+    """
+    agent = None
+    out1 = open("../out/AStar_Map1.csv", 'w')
+    out2 = open("../out/AStar_Map2.csv", 'w')
+    out3 = open("../out/AStar_Map3.csv", 'w')
+    out4 = open("../out/AStar_Map4.csv", 'w')
+    header = "Run Time,Path Length,Heading Changes,Total Degrees\n"
+    out1.write(header)
+    out2.write(header)
+    out3.write(header)
+    out4.write(header)
+    for i in range(iterations):
+        for j in range(len(_mission_files)):
+            # Attempt to start a mission:
+            agent = Agent(_mission_start, _mission_goal[j])
+            agent.create_world((_mission_lower_bounds[j][0], _mission_upper_bounds[j][0]),
+                                 (_mission_lower_bounds[j][1], _mission_upper_bounds[j][1]),
+                                 (_mission_lower_bounds[j][2], _mission_upper_bounds[j][2]),
+                                 _mission_text_files[j])
+            runtime = time.time()
+            path = agent.astar()
+            if not path:
+                if j == 0:
+                    out1.write("{0},{1},{2},{3}\n"
+                               .format(0, 0, 0, 0))
+                elif j == 1:
+                    out2.write("{0},{1},{2},{3}\n"
+                               .format(0, 0, 0, 0))
+                elif j == 2:
+                    out3.write("{0},{1},{2},{3}\n"
+                               .format(0, 0, 0, 0))
+                elif j == 3:
+                    out4.write("{0},{1},{2},{3}\n"
+                               .format(0, 0, 0, 0))
+                continue
+            runtime = time.time() - runtime
+            pathlength = 0.0
+            degrees = 0.0
+            hchanges = 0
+            angle = 0.0
+            for k in range(1, len(path)):
+                pathlength += dist(path[k-1], path[k])
+                ndegree = degree_change(path[k-1], path[k])
+                degrees += abs(angle - ndegree)
+                if ndegree > 0:
+                    hchanges += 1
+                angle = ndegree
+            if j == 0:
+                out1.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+            elif j == 1:
+                out2.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+            elif j == 2:
+                out3.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+            elif j == 3:
+                out4.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+    out1.close()
+    out2.close()
+    out3.close()
+    out4.close()
+
+
+def visualize():
     # Create default Malmo objects:
     agent_host = MalmoPython.AgentHost()
 
@@ -756,5 +868,12 @@ def malmo():
         print("Mission ended")
         # Mission has ended.
 
+
 if __name__ == '__main__':
-    malmo()
+    # If the switch for Malmo is enabled then run it, otherwise gather some data
+    if _visualize:
+        visualize()
+    else:
+        pool = ThreadPool(8)
+
+        gather_data()
