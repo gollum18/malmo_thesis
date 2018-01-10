@@ -1,8 +1,6 @@
 import MalmoPython
 import math, time, sys, random, numpy
 from util import PriorityQueue
-from multiprocessing import Pool
-from multiprocessing.dummy import Pool as ThreadPool
 
 #
 # Program Constants
@@ -97,7 +95,7 @@ def reconstruct_path(n):
 
 class Agent(object):
 
-    def __init__(self, start, goal, alpha=0.05, beta=3.25, epsilon=7.0, max_nodes=5000):
+    def __init__(self, start, goal, alpha=0.05, beta=3.25, epsilon=3.0, max_nodes=5000):
         """
         Creates a representation of a pathfinding agent.
         :param start: The starting node of the agent.
@@ -404,7 +402,7 @@ class Agent(object):
             for p in nodes:
                 if dist(p.get_position(), rand) < dist(nn.get_position(), rand):
                     nn = p
-            newnode = self.sample(nn.get_position(), rand)
+            newnode = self.step_from_to(nn.get_position(), rand)
             nodes.append(Node(newnode, nn))
             self.traversed.add(newnode)
             if self.is_goal(nodes[-1].get_position()):
@@ -427,6 +425,27 @@ class Agent(object):
         else:
             return self.ellipsoid(p1)
 
+    def step_from_to(self, p1, p2):
+        """
+        Adapted from Steven M. Lavalles implementation of RRT and lifted into three dimensions.
+        :param p1: The point being sampled from.
+        :param p2: The point that was randomly sampled.
+        :return: Either the randomly sampled point or a point along the line from p1 to p2.
+        """
+        if dist(p1, p2) < self.epsilon:
+            return p2
+        for i in range(20):
+            r = random.random()
+            x = (1 - r) * p1[0] + r * p2[0]
+            y = math.floor((1 - r) * p1[1] + r * p2[1])
+            z = (1 - r) * p1[2] + r * p2[2]
+            for w in self.world.walkable:
+                if (w[0] <= x <= w[0] + 1 and
+                        w[1] == y and
+                        w[2] <= z <= w[2] + 1):
+                    return w
+        return self.step_from_to(p1, self.random())
+
 
 class Cube(object):
 
@@ -437,12 +456,12 @@ class Cube(object):
         :param ydims: The dimensions of the cuboid in the y axis (height).
         :param zdims: The dimensions of the cuboid in the z axis (width).
         """
-        self.x_lower = xdims[0]
-        self.x_upper = xdims[1]
-        self.y_lower = ydims[0]
-        self.y_upper = ydims[1]
-        self.z_lower = zdims[0]
-        self.z_upper = zdims[1]
+        self.x_lower = min(xdims)
+        self.x_upper = max(xdims)
+        self.y_lower = min(ydims)
+        self.y_upper = max(ydims)
+        self.z_lower = min(zdims)
+        self.z_upper = max(zdims)
 
     def __eq__(self, other):
         """
@@ -724,68 +743,74 @@ def gather_data(iterations=1000):
     :param iterations: The sample size.
     :return: N/A
     """
-    agent = None
-    out1 = open("../out/AStar_Map1.csv", 'w')
-    out2 = open("../out/AStar_Map2.csv", 'w')
-    out3 = open("../out/AStar_Map3.csv", 'w')
-    out4 = open("../out/AStar_Map4.csv", 'w')
-    header = "Run Time,Path Length,Heading Changes,Total Degrees\n"
-    out1.write(header)
-    out2.write(header)
-    out3.write(header)
-    out4.write(header)
-    for i in range(iterations):
-        for j in range(len(_mission_files)):
-            # Attempt to start a mission:
-            agent = Agent(_mission_start, _mission_goal[j])
-            agent.create_world((_mission_lower_bounds[j][0], _mission_upper_bounds[j][0]),
-                                 (_mission_lower_bounds[j][1], _mission_upper_bounds[j][1]),
-                                 (_mission_lower_bounds[j][2], _mission_upper_bounds[j][2]),
-                                 _mission_text_files[j])
-            runtime = time.time()
-            path = agent.astar()
-            if not path:
+    for alg in range(2):
+        agent = None
+        out1 = open("../out/AStar_Map1.csv", 'w') if alg == 0 else open("../out/RRT_Map1.csv", 'w')
+        out2 = open("../out/AStar_Map2.csv", 'w') if alg == 0 else open("../out/RRT_Map2.csv", 'w')
+        out3 = open("../out/AStar_Map3.csv", 'w') if alg == 0 else open("../out/RRT_Map3.csv", 'w')
+        out4 = open("../out/AStar_Map4.csv", 'w') if alg == 0 else open("../out/RRT_Map4.csv", 'w')
+        header = "Run Time,Path Length,Heading Changes,Total Degrees (Degrees)\n"
+        out1.write(header)
+        out2.write(header)
+        out3.write(header)
+        out4.write(header)
+        for i in range(iterations):
+            for j in range(len(_mission_files)):
+                # Attempt to start a mission:
+                agent = Agent(_mission_start, _mission_goal[j])
+                agent.create_world((_mission_lower_bounds[j][0], _mission_upper_bounds[j][0]),
+                                     (_mission_lower_bounds[j][1], _mission_upper_bounds[j][1]),
+                                     (_mission_lower_bounds[j][2], _mission_upper_bounds[j][2]),
+                                     _mission_text_files[j])
+                path = None
+                runtime = time.clock()
+                if alg == 0:
+                    path = agent.astar()
+                else:
+                    path = agent.rrt()
+                if not path:
+                    if j == 0:
+                        out1.write("{0},{1},{2},{3}\n"
+                                   .format(0, 0, 0, 0))
+                    elif j == 1:
+                        out2.write("{0},{1},{2},{3}\n"
+                                   .format(0, 0, 0, 0))
+                    elif j == 2:
+                        out3.write("{0},{1},{2},{3}\n"
+                                   .format(0, 0, 0, 0))
+                    elif j == 3:
+                        out4.write("{0},{1},{2},{3}\n"
+                                   .format(0, 0, 0, 0))
+                    continue
+                runtime = time.clock() - runtime
+                pathlength = 0.0
+                degrees = 0.0
+                hchanges = 0
+                for k in range(1, len(path)):
+                    pathlength += dist(path[k-1], path[k])
+                    change = degree_change(path[k-1], path[k])
+                    if change < 0:
+                        change += 2*math.pi
+                    degrees += change
+                    if change > 0:
+                        hchanges += 1
+                degrees = math.degrees(degrees)
                 if j == 0:
                     out1.write("{0},{1},{2},{3}\n"
-                               .format(0, 0, 0, 0))
+                               .format(runtime, pathlength, hchanges, degrees))
                 elif j == 1:
                     out2.write("{0},{1},{2},{3}\n"
-                               .format(0, 0, 0, 0))
+                               .format(runtime, pathlength, hchanges, degrees))
                 elif j == 2:
                     out3.write("{0},{1},{2},{3}\n"
-                               .format(0, 0, 0, 0))
+                               .format(runtime, pathlength, hchanges, degrees))
                 elif j == 3:
                     out4.write("{0},{1},{2},{3}\n"
-                               .format(0, 0, 0, 0))
-                continue
-            runtime = time.time() - runtime
-            pathlength = 0.0
-            degrees = 0.0
-            hchanges = 0
-            angle = 0.0
-            for k in range(1, len(path)):
-                pathlength += dist(path[k-1], path[k])
-                ndegree = degree_change(path[k-1], path[k])
-                degrees += abs(angle - ndegree)
-                if ndegree > 0:
-                    hchanges += 1
-                angle = ndegree
-            if j == 0:
-                out1.write("{0},{1},{2},{3}\n"
-                           .format(runtime, pathlength, hchanges, degrees))
-            elif j == 1:
-                out2.write("{0},{1},{2},{3}\n"
-                           .format(runtime, pathlength, hchanges, degrees))
-            elif j == 2:
-                out3.write("{0},{1},{2},{3}\n"
-                           .format(runtime, pathlength, hchanges, degrees))
-            elif j == 3:
-                out4.write("{0},{1},{2},{3}\n"
-                           .format(runtime, pathlength, hchanges, degrees))
-    out1.close()
-    out2.close()
-    out3.close()
-    out4.close()
+                               .format(runtime, pathlength, hchanges, degrees))
+        out1.close()
+        out2.close()
+        out3.close()
+        out4.close()
 
 
 def visualize():
@@ -874,6 +899,4 @@ if __name__ == '__main__':
     if _visualize:
         visualize()
     else:
-        pool = ThreadPool(8)
-
         gather_data()
