@@ -6,18 +6,26 @@ from util import PriorityQueue
 # Program Constants
 #
 
-_mission_files = ('./missions/pp_maze_one.xml',
+_astar_maps = ["../out/AStar_Map1.csv",
+               "../out/AStar_Map2.csv",
+               "../out/AStar_Map3.csv",
+               "../out/AStar_Map4.csv"]
+_rrt_maps = ["../out/RRT_Map1.csv",
+               "../out/RRT_Map2.csv",
+               "../out/RRT_Map3.csv",
+               "../out/RRT_Map4.csv"]
+_mission_files = ['./missions/pp_maze_one.xml',
                  './missions/pp_maze_two.xml',
                  './missions/pp_maze_three.xml',
-                 './missions/pp_maze_four.xml')
-_mission_text_files = ('./missions/pp_maze_one.txt',
+                 './missions/pp_maze_four.xml']
+_mission_text_files = ['./missions/pp_maze_one.txt',
                       './missions/pp_maze_two.txt',
                       './missions/pp_maze_three.txt',
-                      './missions/pp_maze_four.txt')
-_mission_lower_bounds = ((-24, 55, -24), (-24, 55, -24), (-25, 53, -24), (-24, 55, -24))
-_mission_upper_bounds = ((26, 70, 25), (25, 70, 25), (25, 70, 25), (25, 70, 25))
+                      './missions/pp_maze_four.txt']
+_mission_lower_bounds = [(-24, 55, -24), (-24, 55, -24), (-25, 53, -24), (-24, 55, -24)]
+_mission_upper_bounds = [(26, 70, 25), (25, 70, 25), (25, 70, 25), (25, 70, 25)]
 _mission_start = (0.5, 56, 24.5)
-_mission_goal = ((0.5, 56, -23.5), (0.5, 58, -23.5), (0.5, 54, -23.5), (0.5, 56, 0.5))
+_mission_goal = [(0.5, 56, -23.5), (0.5, 58, -23.5), (0.5, 54, -23.5), (0.5, 56, 0.5)]
 
 # Needed by the neighbor generation algorithm
 _diff = [-1, 0, 1]
@@ -32,6 +40,9 @@ _runtime = 1
 _pathlength = 2
 _degrees = 3
 
+#
+# CPU bound instructions
+#
 
 def cost(p1, p2):
     """
@@ -92,10 +103,13 @@ def reconstruct_path(n):
         n = n.get_parent()
     return path
 
+#
+# GPU bound instructions
+#
 
 class Agent(object):
 
-    def __init__(self, start, goal, alpha=0.05, beta=3.25, epsilon=3.0, max_nodes=5000):
+    def __init__(self, start, goal, alpha=0.05, beta=3.25, epsilon=3.0, p_goal=.05, max_nodes=5000):
         """
         Creates a representation of a pathfinding agent.
         :param start: The starting node of the agent.
@@ -110,6 +124,7 @@ class Agent(object):
         self.alpha = alpha
         self.beta = beta
         self.epsilon = epsilon
+        self.goal_probability = p_goal
         self.max_nodes = max_nodes
         self.world = None
         self.traversed = set()
@@ -282,21 +297,6 @@ class Agent(object):
             evaluated.add(current)
             self.world.add_walkable_space(current)
 
-    def ellipsoid(self, p, xr=7.0, yr=3.0, zr=7.0):
-        """
-        Randomly samples a point from the ellipsoid region around the agent.
-        :param p: The center of the ellipsoid.
-        :param xr: The length of the x radius.
-        :param yr: The length of the y radius.
-        :param zr: The length of the z radius.
-        :return: A randomly sampled point from the ellipsoid around the agent.
-        """
-        theta = random.uniform(0, 2*math.pi)
-        phi = random.uniform(-math.pi/2, math.pi/2)
-        return (math.floor(xr*math.cos(theta)*math.cos(phi))+.5,
-                math.floor(yr*math.sin(phi)),
-                math.floor(zr*math.sin(theta)*math.cos(phi))+.5)
-
     def generate_neighbors(self, p):
         """
         Generates octilian neighbors from the given point.
@@ -348,45 +348,13 @@ class Agent(object):
                     return False
         return True
 
-    def line_to(self, p1, p2):
-        """
-        Randomly samples a point along the line defined by p1 and p2.
-        :param p1: The first terminus of the line.
-        :param p2: The second terminus of the line.
-        :return: A randomly sampled point defined by p1 and p2.
-        """
-        if dist(p1, p2) < self.epsilon:
-            return p2
-        else:
-            theta = math.atan2(p2[1]-p1[1],p2[0]-p1[0])
-            p = (math.floor(p1[0] + self.epsilon*math.cos(theta))+.5,
-                    math.floor(p1[1] + self.epsilon*math.sin(theta)),
-                    math.floor(p1[2] + self.epsilon*math.sin(theta)*math.cos(theta))+.5)
-            if p in self.world.walkable - self.traversed:
-                return p
-            else:
-                return self.nearest_neighbor(p)
-
-    def nearest_neighbor(self, p):
-        """
-        Finds the nearest point from walkable space.
-        :param p: The point to find the nearest neighbor of.
-        :return: The nearest neighbor in walkable space from this point.
-        """
-        mindist = float("inf")
-        neighbor = None
-        for n in self.world.walkable - self.traversed:
-            temp = dist(p, n)
-            if temp < mindist:
-                mindist = temp
-                neighbor = n
-        return neighbor
-
     def random(self):
         """
-        Randomly samples a point from walkable space.
+        Randomly samples a point from walkable space. Has a user defined percentage to sample the goal.
         :return: A randomly sampled point from available walkable space.
         """
+        if random.random() < self.goal_probability:
+            return self.goal
         return random.sample(self.world.walkable - self.traversed, 1)[0]
 
     def rrt(self):
@@ -394,36 +362,26 @@ class Agent(object):
         Finds a path in the world using a rapidly exploring random tree.
         :return: A path if it is found, otherwise an empty list.
         """
+        def neighbor(points, p):
+            points.sort(key=lambda q: (p[0] - q.get_position()[0]) * (p[0] - q.get_position()[0]) +
+                                      (p[1] - q.get_position()[1]) * (p[1] - q.get_position()[1]) +
+                                      (p[2] - q.get_position()[2]) * (p[2] - q.get_position()[2]))
+            return points[0]
+
         nodes = [Node(self.start)]
 
         for i in range(self.max_nodes):
             rand = self.random()
-            nn = nodes[0]
-            for p in nodes:
-                if dist(p.get_position(), rand) < dist(nn.get_position(), rand):
-                    nn = p
+            nn = neighbor(nodes, rand)
+            #for p in nodes:
+            #    if dist(p.get_position(), rand) < dist(nn.get_position(), rand):
+            #        nn = p
             newnode = self.step_from_to(nn.get_position(), rand)
             nodes.append(Node(newnode, nn))
             self.traversed.add(newnode)
             if self.is_goal(nodes[-1].get_position()):
                 return reconstruct_path(nodes[-1])
-
         return []
-
-    def sample(self, p1, p2):
-        """
-        Samples a point from walkable space.
-        :param p1: A point evaluating from.
-        :param p2: A randomly drawn walkable point.
-        :return: A point from walkable space.
-        """
-        p = random.random()
-        if p > 1 - self.alpha:
-            return self.line_to(p1, p2)
-        elif p <= (1 - self.alpha) / self.beta or not self.line_of_sight(p1, p2):
-            return self.random()
-        else:
-            return self.ellipsoid(p1)
 
     def step_from_to(self, p1, p2):
         """
@@ -737,80 +695,81 @@ class World(Cube):
         return self.player_inside(p) and self.is_on_obstacle(p) and not self.is_player_blocked(p, height)
 
 
-def gather_data(iterations=1000):
+def gather_data(alg=0, iterations=1000):
     """
     Gathers data on the pathfinding algorithms.
+    :alg: The algorithm to use, 0 for A*. anything else for RRT.
+    :map_number: The map number, an exception is raised if it is not between 0 and the total number of maps.
     :param iterations: The sample size.
     :return: N/A
     """
-    for alg in range(2):
-        agent = None
-        out1 = open("../out/AStar_Map1.csv", 'w') if alg == 0 else open("../out/RRT_Map1.csv", 'w')
-        out2 = open("../out/AStar_Map2.csv", 'w') if alg == 0 else open("../out/RRT_Map2.csv", 'w')
-        out3 = open("../out/AStar_Map3.csv", 'w') if alg == 0 else open("../out/RRT_Map3.csv", 'w')
-        out4 = open("../out/AStar_Map4.csv", 'w') if alg == 0 else open("../out/RRT_Map4.csv", 'w')
-        header = "Run Time,Path Length,Heading Changes,Total Degrees (Degrees)\n"
-        out1.write(header)
-        out2.write(header)
-        out3.write(header)
-        out4.write(header)
-        for i in range(iterations):
-            for j in range(len(_mission_files)):
-                # Attempt to start a mission:
-                agent = Agent(_mission_start, _mission_goal[j])
-                agent.create_world((_mission_lower_bounds[j][0], _mission_upper_bounds[j][0]),
-                                     (_mission_lower_bounds[j][1], _mission_upper_bounds[j][1]),
-                                     (_mission_lower_bounds[j][2], _mission_upper_bounds[j][2]),
-                                     _mission_text_files[j])
-                path = None
-                runtime = time.clock()
-                if alg == 0:
-                    path = agent.astar()
-                else:
-                    path = agent.rrt()
-                if not path:
-                    if j == 0:
-                        out1.write("{0},{1},{2},{3}\n"
-                                   .format(0, 0, 0, 0))
-                    elif j == 1:
-                        out2.write("{0},{1},{2},{3}\n"
-                                   .format(0, 0, 0, 0))
-                    elif j == 2:
-                        out3.write("{0},{1},{2},{3}\n"
-                                   .format(0, 0, 0, 0))
-                    elif j == 3:
-                        out4.write("{0},{1},{2},{3}\n"
-                                   .format(0, 0, 0, 0))
-                    continue
-                runtime = time.clock() - runtime
-                pathlength = 0.0
-                degrees = 0.0
-                hchanges = 0
-                for k in range(1, len(path)):
-                    pathlength += dist(path[k-1], path[k])
-                    change = degree_change(path[k-1], path[k])
-                    if change < 0:
-                        change += 2*math.pi
-                    degrees += change
-                    if change > 0:
-                        hchanges += 1
-                degrees = math.degrees(degrees)
+    agent = None
+    out1 = open("../out/AStar_Map1.csv", 'w') if alg == 0 else open("../out/RRT_Map1.csv", 'w')
+    out2 = open("../out/AStar_Map2.csv", 'w') if alg == 0 else open("../out/RRT_Map2.csv", 'w')
+    out3 = open("../out/AStar_Map3.csv", 'w') if alg == 0 else open("../out/RRT_Map3.csv", 'w')
+    out4 = open("../out/AStar_Map4.csv", 'w') if alg == 0 else open("../out/RRT_Map4.csv", 'w')
+    header = "Run Time,Path Length,Heading Changes,Total Degrees (Degrees)\n"
+    out1.write(header)
+    out2.write(header)
+    out3.write(header)
+    out4.write(header)
+    for i in range(iterations):
+        for j in range(len(_mission_files)):
+            # Attempt to start a mission:
+            agent = Agent(_mission_start, _mission_goal[j])
+            agent.create_world((_mission_lower_bounds[j][0], _mission_upper_bounds[j][0]),
+                               (_mission_lower_bounds[j][1], _mission_upper_bounds[j][1]),
+                               (_mission_lower_bounds[j][2], _mission_upper_bounds[j][2]),
+                               _mission_text_files[j])
+            path = None
+            runtime = time.clock()
+            if alg == 0:
+                path = agent.astar()
+            else:
+                path = agent.rrt()
+            if not path:
                 if j == 0:
                     out1.write("{0},{1},{2},{3}\n"
-                               .format(runtime, pathlength, hchanges, degrees))
+                               .format(0, 0, 0, 0))
                 elif j == 1:
                     out2.write("{0},{1},{2},{3}\n"
-                               .format(runtime, pathlength, hchanges, degrees))
+                               .format(0, 0, 0, 0))
                 elif j == 2:
                     out3.write("{0},{1},{2},{3}\n"
-                               .format(runtime, pathlength, hchanges, degrees))
+                               .format(0, 0, 0, 0))
                 elif j == 3:
                     out4.write("{0},{1},{2},{3}\n"
-                               .format(runtime, pathlength, hchanges, degrees))
-        out1.close()
-        out2.close()
-        out3.close()
-        out4.close()
+                               .format(0, 0, 0, 0))
+                continue
+            runtime = time.clock() - runtime
+            pathlength = dist(agent.start, path[0])
+            degrees = degree_change(agent.start, path[0])
+            hchanges = 1 if degrees != 0 else 0
+            for k in range(1, len(path)):
+                pathlength += dist(path[k - 1], path[k])
+                change = degree_change(path[k - 1], path[k])
+                if change < 0:
+                    change += 2 * math.pi
+                degrees += change
+                if change > 0:
+                    hchanges += 1
+            degrees = math.degrees(degrees)
+            if j == 0:
+                out1.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+            elif j == 1:
+                out2.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+            elif j == 2:
+                out3.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+            elif j == 3:
+                out4.write("{0},{1},{2},{3}\n"
+                           .format(runtime, pathlength, hchanges, degrees))
+    out1.close()
+    out2.close()
+    out3.close()
+    out4.close()
 
 
 def visualize():
@@ -899,4 +858,4 @@ if __name__ == '__main__':
     if _visualize:
         visualize()
     else:
-        gather_data()
+        gather_data(0)
