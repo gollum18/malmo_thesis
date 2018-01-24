@@ -1,6 +1,13 @@
+#! /usr/bin/python
+
 import MalmoPython
 import math, time, sys, random, numpy
 from util import PriorityQueue
+
+import pycuda.autoinit
+import pycuda.driver as driver
+import pycuda.compiler as compiler
+import pycuda.gpuarray as gpuarray
 
 #
 # Program Constants
@@ -11,13 +18,17 @@ _astar_maps = ["../out/AStar_Map1.csv",
                "../out/AStar_Map3.csv",
                "../out/AStar_Map4.csv"]
 _rrt_maps = ["../out/RRT_Map1.csv",
-               "../out/RRT_Map2.csv",
-               "../out/RRT_Map3.csv",
-               "../out/RRT_Map4.csv"]
+             "../out/RRT_Map2.csv",
+             "../out/RRT_Map3.csv",
+             "../out/RRT_Map4.csv"]
+_rrt_gpu_maps = ["../out/RRTGPU_Map1.csv",
+                 "../out/RRTGPU_Map2.csv",
+                 "../out/RRTGPU_Map3.csv",
+                 "../out/RRTGPU_Map4.csv"]
 _mission_files = ['./missions/pp_maze_one.xml',
-                 './missions/pp_maze_two.xml',
-                 './missions/pp_maze_three.xml',
-                 './missions/pp_maze_four.xml']
+                  './missions/pp_maze_two.xml',
+                  './missions/pp_maze_three.xml',
+                  './missions/pp_maze_four.xml']
 _mission_text_files = ['./missions/pp_maze_one.txt',
                       './missions/pp_maze_two.txt',
                       './missions/pp_maze_three.txt',
@@ -32,13 +43,8 @@ _diff = [-1, 0, 1]
 
 # Switches for debugging
 _visualize = False
+_gpu = True
 _debug_paths = False
-
-# Data Flags
-_hchanges = 0
-_runtime = 1
-_pathlength = 2
-_degrees = 3
 
 #
 # CPU bound instructions
@@ -88,7 +94,8 @@ def heuristic(p1, p2):
     dx = math.fabs(p2[0] - p1[0])
     dy = math.fabs(p2[1] - p1[1])
     dz = math.fabs(p2[2] - p1[2])
-    return dx * 1.0 + dy * 1.5 + dz * 1.0
+    # Weight the y dimension
+    return dx + dy * 1.5 + dz
 
 
 def reconstruct_path(n):
@@ -106,6 +113,37 @@ def reconstruct_path(n):
 #
 # GPU bound instructions
 #
+mod = compiler.SourceModule(
+"""
+    #include <float.h>
+    __global__ void neighbors(int n, // The number of array elements
+                             float3 result, // The closest point
+                             float3 point, // The point to find neareast neighbor
+                             float3 * neighbors // All of the neighbors
+                             ) {
+        // Get the starting index on the GPU
+        int i = blockIdx.x * blockDim.x + threadIdx.x;
+        // Calculate and store the nearest neighbor
+        float dist = (point.x-neighbors[i].x)*(point.x-neighbors[i].x)+
+                     (point.y-neighbors[i].y)*(point.y-neighbors[i].y)+
+                     (point.z-neighbors[i].z)*(point.z-neighbors[i].z);
+        result = neighbors[i];
+        # Advance to the second neighbor in this block
+        i += blockDim.x * gridDim.x;
+        // Stride through the array in GPU memory looking for the
+        //  correct nearest neighbor
+        for (; i < n; i += blockDim.x * gridDim.x) {
+            float temp = (point.x-neighbors[i].x)*(point.x-neighbors[i].x)+
+                         (point.y-neighbors[i].y)*(point.y-neighbors[i].y)+
+                         (point.z-neighbors[i].z)*(point.z-neighbors[i].z);
+            if (temp < dist) {
+                dist = temp;
+                result = neighbors[i];
+            }
+        }
+    }
+"""
+)
 
 class Agent(object):
 
@@ -363,6 +401,12 @@ class Agent(object):
         :return: A path if it is found, otherwise an empty list.
         """
         def neighbor(points, p):
+            """
+            Finds the nearest neighbor to a point using Tim Sort.
+            :param points: The tree itself.
+            :param p: The point being added to the tree.
+            :return: The point nearest to p in the tree.
+            """
             points.sort(key=lambda q: (p[0] - q.get_position()[0]) * (p[0] - q.get_position()[0]) +
                                       (p[1] - q.get_position()[1]) * (p[1] - q.get_position()[1]) +
                                       (p[2] - q.get_position()[2]) * (p[2] - q.get_position()[2]))
@@ -372,7 +416,20 @@ class Agent(object):
 
         for i in range(self.max_nodes):
             rand = self.random()
-            nn = neighbor(nodes, rand)
+            nn = None
+            # Runs Tim sort on the CPU to find nearest neighbor
+            if not _gpu:
+                nn = neighbor(nodes, rand)
+            # Runs NN on the GPU
+            else:
+                # TODO: Need to convert nodes over to a list of tuples
+                func = mod.get_function("neighbors")
+                func(driver.In(len(nodes)), # The
+                     driver.Out(nn), # The Nearest neighbor
+                     driver.In(rand), # The point
+                     driver.In(nodes), # The neighbors
+                     block=(4, 4, 4))
+            # From Steven M. Lavalles implementation
             #for p in nodes:
             #    if dist(p.get_position(), rand) < dist(nn.get_position(), rand):
             #        nn = p
@@ -564,6 +621,9 @@ class Node(object):
         self.parent = parent
         self.gscore = 0.0
 
+    def __iter__(self):
+        return iter(self.position)
+
     def get_position(self):
         """
         Gets the position of this node.
@@ -629,7 +689,7 @@ class World(Cube):
         """
         Adds a point of walkable space to the agents world representation.
         :param p: The point ot add walkable space to.
-        :return: N?A
+        :return: N/A
         """
         self.walkable.add(p)
 
@@ -704,10 +764,10 @@ def gather_data(alg=0, iterations=1000):
     :return: N/A
     """
     agent = None
-    out1 = open("../out/AStar_Map1.csv", 'w') if alg == 0 else open("../out/RRT_Map1.csv", 'w')
-    out2 = open("../out/AStar_Map2.csv", 'w') if alg == 0 else open("../out/RRT_Map2.csv", 'w')
-    out3 = open("../out/AStar_Map3.csv", 'w') if alg == 0 else open("../out/RRT_Map3.csv", 'w')
-    out4 = open("../out/AStar_Map4.csv", 'w') if alg == 0 else open("../out/RRT_Map4.csv", 'w')
+    out1 = open(_astar_maps[0], 'w') if alg == 0 else open(_rrt_maps[0] if not _gpu else _rrt_gpu_maps[0], 'w')
+    out2 = open(_astar_maps[1], 'w') if alg == 0 else open(_rrt_maps[1] if not _gpu else _rrt_gpu_maps[1], 'w')
+    out3 = open(_astar_maps[2], 'w') if alg == 0 else open(_rrt_maps[2] if not _gpu else _rrt_gpu_maps[2], 'w')
+    out4 = open(_astar_maps[3], 'w') if alg == 0 else open(_rrt_maps[3] if not _gpu else _rrt_gpu_maps[3], 'w')
     header = "Run Time,Path Length,Heading Changes,Total Degrees (Degrees)\n"
     out1.write(header)
     out2.write(header)
@@ -808,7 +868,7 @@ def visualize():
                     w[point[1]].add((point[0], point[2]))
                 else:
                     w[point[1]] = set()
-                    w[point[1]].add((point[0], point[2]))
+                    w[point[1]].add([point[0], point[2]])
             print(path)
 
         # Comment this out when actually testing with the Malmo platform
@@ -858,4 +918,4 @@ if __name__ == '__main__':
     if _visualize:
         visualize()
     else:
-        gather_data(0)
+        gather_data(1)
