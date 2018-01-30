@@ -1,277 +1,238 @@
-class Obstacle(object):
+class Cube(object):
 
     def __init__(self, xdims, ydims, zdims):
         """
-        Creates an instance of an obstacle object.
-        :param xdims: The x dimensions of the object.
-        :param ydims: The y dimensions of the object.
-        :param zdims: The z dimensions of the object.
+        Creates an instance of a cuboid object.
+        :param xdims: The dimensions of the cuboid in the x axis (length).
+        :param ydims: The dimensions of the cuboid in the y axis (height).
+        :param zdims: The dimensions of the cuboid in the z axis (width).
         """
-        self.xdims = xdims
-        self.ydims = ydims
-        self.zdims = zdims
+        self.x_lower = min(xdims)
+        self.x_upper = max(xdims)
+        self.y_lower = min(ydims)
+        self.y_upper = max(ydims)
+        self.z_lower = min(zdims)
+        self.z_upper = max(zdims)
 
     def __eq__(self, other):
         """
-        Determines if this obstacle is equal to another.
-        :param other: The other obstacle to compare against.
-        :return: True if the obstacles share the same obstacle ID, False otherwise.
+        Determines another obstacle is equal to this one.
+        :param other: The other obstacle to check.
+        :return: True if the two obstacles share the same dimensions, False otherwise.
         """
-        return (self.xdims == other.xdims and
-                self.ydims == other.ydims and
-                self.zdims == other.zdims)
+        return (self.x_lower == other.x_lower and self.y_lower == other.y_lower and self.z_lower == other.z_lower and
+                self.x_upper == other.x_upper and self.y_upper == other.y_upper and self.z_upper == other.z_upper)
 
     def __ne__(self, other):
         """
-        Determines if this obstacle is not equal to another.
-        :param other: The other obstacle to compare against.
-        :return: True if the obstacles do not share the same obstacle ID, False otherwise.
+        Determines another obstacle is not equal to this one.
+        :param other: The other obstacle to check.
+        :return: True if the two obstacles do not share the same dimensions, False otherwise.
         """
         return not self.__eq__(other)
 
     def __hash__(self):
         """
-        Creates a hash for this obstacle.
-        :return: An integer.
+        Gets a hash representing this obstacle.
+        :return: A hash representing this obstacle.
         """
-        return hash((self.xdims, self.ydims, self.zdims))
+        return hash((self.x_lower, self.x_upper, self.y_lower, self.y_upper, self.z_lower, self.z_upper))
 
-    def get_xmin(self):
+    def __str__(self):
         """
-        Gets the minimum x dimension of this obstacle.
-        :return: An integer.
+        Gets an informal string representation of this obstacle.
+        :return: An informal string representing the obstacle.
         """
-        return min(self.xdims)
+        return "The Bounds of this Obstacle are -> \n\tx:({0}, {1}), ({2}, {3}), ({4}, {5})".format(
+            self.x_lower, self.x_upper, self.y_lower, self.y_upper, self.z_lower, self.z_upper
+        )
 
-    def get_xmax(self):
+    def get_lower_bounds(self):
         """
-        Gets the maximum x dimension of this obstacle.
-        :return: An integer.
+        Gets a tuple (x, y, z) containing the lower bounds of the obstacle.
+        :return: A tuple (x, y, z) containing the lower bounds of the obstacle.
         """
-        return max(self.xdims)
+        return self.x_lower, self.y_lower, self.z_lower
 
-    def get_ymin(self):
+    def get_upper_bounds(self):
         """
-        Gets the minimum y dimension of this obstacle.
-        :return: An integer.
+        Gets a tuple (x, y, z) containing the upper bounds of the obstacle.
+        :return: A tuple (x, y, z) containing the upper bounds of the obstacle.
         """
-        return min(self.ydims)
+        return self.x_upper, self.y_upper, self.z_upper
 
-    def get_ymax(self):
+    def get_x_lower(self):
         """
-        Gets the maximum y dimension of this obstacle.
-        :return: An integer.
+        Gets the lower bound of the obstacle on the x dimension.
+        :return: The lower bound of the obstacle on the x dimension.
         """
-        return max(self.ydims)
+        return self.x_lower
 
-    def get_zmin(self):
+    def get_x_upper(self):
         """
-        Gets the minimum z dimension of this obstacle.
-        :return: An integer.
+        Gets the upper bound of the obstacle on the x dimension.
+        :return: The upper bound of the obstacle on the x dimension.
         """
-        return min(self.zdims)
+        return self.x_upper
 
-    def get_zmax(self):
+    def get_y_lower(self):
         """
-        Gets the maximum z dimenison of this obstacle.
-        :return: An integer.
+        Gets the lower bound of the obstacle on the y dimension.
+        :return: The lower bound of the obstacle on the y dimension.
         """
-        return max(self.zdims)
+        return self.y_lower
 
-    def set_xdims(self, xdims):
+    def get_y_upper(self):
         """
-        Sets the x dimensions of the world.
-        :param xdims: A tuple (min-x, max-x)
-        :return: N/A
+        Gets the upper bound of the obstacle on the y dimension.
+        :return: The upper bound of the obstacle on the y dimension.
         """
-        self.xdims = xdims
+        return self.y_upper
 
-    def set_ydims(self, ydims):
+    def get_z_lower(self):
         """
-        Sets the y dimensions of the world.
-        :param ydims: A tuple (min-y, max-y)
-        :return: N/A
+        Gets the lower bound of the obstacle on the z dimension.
+        :return: The lower bound of the obstacle on the z dimension.
         """
-        self.ydims = ydims
+        return self.z_lower
 
-    def set_zdims(self, zdims):
+    def get_z_upper(self):
         """
-        Sets the z dimensions of the world.
-        :param zdims: A tuple (min-z, max-z)
-        :return: N/A
+        Gets the upper bound of the obstacle on the z dimension.
+        :return: The upper bound of the obstacle on the z dimension.
         """
-        self.zdims = zdims
-
-    def inside(self, p):
-        """
-        Determines if a point lies inside this obstacle.
-        :param p: A tuple (x, y, z).
-        :return: True if the point lies inside the obstacle, False otherwise.
-        """
-        return (self.get_xmin() <= p[0] < self.get_xmax() and
-                self.get_ymin() <= p[1] < self.get_ymax() and
-                self.get_zmin() <= p[2] < self.get_zmax())
+        return self.z_upper
 
     def ontop(self, p):
         """
-        Determines if a point is on top of the obstacle or not.
-        :param p: A tuple (x, y, z).
-        :return: True if the point is on top of the obstacle, False otherwise.
+        Determines if a point is ontop of this obstacle.
+        :param p: The point to check.
+        :return: True if the point is ontop of the obstacle, False otherwise.
         """
-        return (self.get_xmin() <= p[0] < self.get_xmax() and
-                p[1] == self.get_ymax() and
-                self.get_zmin() <= p[2] < self.get_zmax())
+        if (self.x_lower <= p[0] <= self.x_upper and
+                self.y_upper == p[1] and
+                self.z_lower <= p[2] <= self.z_upper):
+            return True
+        return False
 
-class World(object):
+    def player_inside(self, p, height=2):
+        """
+        Determines if the player is inside the obstacle.
+        :param p: The point to check.
+        :param height: The players height in units >= 1.
+        :return: Determines if the player collides with this object.
+        """
+        if height < 1:
+            height = 1
+        points = set()
+        for dy in range(1, height+1):
+            points.add((p[0], p[1]+dy-.5, p[2]))
+        for point in points:
+            if self.point_inside(point):
+                return True
+        return False
+
+    def point_inside(self, p):
+        """
+        Determines if the point is inside this object or not.
+        :param p: The point to check.
+        :return: True if the point is inside this object, False otherwise.
+        """
+        if (self.x_lower < p[0] < self.x_upper and
+                self.y_lower < p[1] < self.y_upper and
+                self.z_lower < p[2] < self.z_upper):
+            return True
+        return False
+
+
+class World(Cube):
 
     def __init__(self, xdims, ydims, zdims):
         """
-        Creates a world instance.
-        :param xdims: The x dimensions of the world.
-        :param ydims: The y dimensions of the world.
-        :param zdims: The z dimensions of the world.
+        Creates an instance of a world object.
+        :param xdims: The dimensions of the world in the x axis (length).
+        :param ydims: The dimensions of the world in the y axis (height).
+        :param zdims: The dimensions of the world in the z axis (width).
         """
-        self.xdims = xdims
-        self.ydims = ydims
-        self.zdims = zdims
+        super(World, self).__init__(xdims, ydims, zdims)
         self.obstacles = set()
-        self.walkable = dict()
-        self.sampling_space = set()
-
-    def get_xmin(self):
-        """
-        Gets the minimum x dimension of the world.
-        :return: An integer x | x < max(x dimensions).
-        """
-        return min(self.xdims)
-
-    def get_xmax(self):
-        """
-        Gets the maximum y dimension of the world.
-        :return: An integer y | y > min(y dimensions).
-        """
-        return max(self.xdims)
-
-    def get_ymin(self):
-        """
-        Gets the minimum z dimension of the world.
-        :return: An integer z | z < max(z dimensions).
-        """
-        return min(self.ydims)
-
-    def get_ymax(self):
-        """
-        Gets the maximum x dimension of the world.
-        :return: An integer x | x > min(x dimensions).
-        """
-        return max(self.ydims)
-
-    def get_zmin(self):
-        """
-        Gets the minimum y dimension of the world.
-        :return: An integer y | y < max(y dimensions).
-        """
-        return min(self.zdims)
-
-    def get_zmax(self):
-        """
-        Gets the maximum z dimension of the world.
-        :return: An integer z | z > min(z dimensions).
-        """
-        return max(self.zdims)
-
-    def get_obstacles(self):
-        """
-        Gets a list containing all the obstacles.
-        :return: A list containing all obstacles.
-        """
-        return self.obstacles
-
-    def get_sampling_space(self):
-        return self.sampling_space
+        self.walkable = set()
 
     def add_obstacle(self, xdims, ydims, zdims):
         """
-        Adds an obstacle to the world.
-        :param xdims: A tuple (min-x, max-x).
-        :param ydims: A tuple (min-y, max-y).
-        :param zdims: A tuple (min-z, max-z).
+        Adds an obstacle to the agents world representation.
+        :param xdims: The dimensions of the obstacle in the x axis (length).
+        :param ydims: The dimensions of the obstacle in the y axis (height).
+        :param zdims: The dimensions of the obstacle in the z axis (width).
         :return: N/A
         """
-        self.obstacles.add(Obstacle(xdims, ydims, zdims))
+        self.obstacles.add(Cube(xdims, ydims, zdims))
 
-    def add_walkable(self, p):
+    def add_walkable_space(self, p):
         """
-        Adds a walkable point to the world.
-        :param p: A tuple (x, y, z).
+        Adds a point of walkable space to the agents world representation.
+        :param p: The point ot add walkable space to.
         :return: N/A
         """
-        if p[1] in self.walkable.keys():
-            self.walkable[p[1]].add((p[0], p[2]))
-        else:
-            self.walkable[p[1]] = set()
-            self.walkable[p[1]].add((p[0], p[2]))
+        self.walkable.add(p)
 
-    def empty(self):
+    def clear(self):
         """
-        Clears this worlds obstacles and walkable space.
+        Clears the world object and prepares it for deletion.
         :return: N/A
         """
         self.obstacles.clear()
         self.walkable.clear()
+        del self.obstacles
+        del self.walkable
 
-    def in_bounds(self, p):
+    def is_point_blocked(self, p):
         """
-        Determines if a point is inside the world.
-        :param p: A tuple (x, y, z).
-        :return: True if the point is within the world, False otherwise.
+        Determines if the point is blocked or not.
+        :param p: The point to check.
+        :return: True if the point is blocked by an obstacle, False otherwise.
         """
-        return (self.get_xmin() <= p[0] < self.get_xmax() and
-                self.get_ymin() <= p[1] < self.get_ymax() and
-                self.get_zmin() <= p[2] < self.get_zmax())
-
-    def is_blocked(self, p):
-        """
-        Determines if a point is inside an obstacle.
-        :param p: A tuple (x, y, z).
-        :return: True if the point is within an obstacle in the world, False otherwise.
-        """
-        for obstacle in self.obstacles:
-            if obstacle.inside(p):
+        for obs in self.obstacles:
+            if obs.point_inside(p):
                 return True
         return False
 
-    def is_valid(self, p):
+    def is_player_blocked(self, p, height=2):
         """
-        Determines if a point is valid such that it is in bounds and outside an obstacle.
-        :param p: A tuple (x, y, z).
-        :return: True if the point is valid, False otherwise.
-        """
-        return self.in_bounds(p) and not self.is_blocked(p)
-
-    def is_traversable(self, p):
-        """
-        Determines whether a point can be traversed or not. This is distinct from is_walkable as this checks whether
-            a point falls on top of an obstacle or not.
-        :param p: A tuple (x, y, z).
-        :return: True if the point is traversable, False otherwise.
+        Determines if the specified point contains and region (determined by the players height) is blocked.
+        :param p: The point to check.
+        :param height: The height of the player in units >= 1.
+        :return: True if the player cannot move to the specified point, False otherwise.
         """
         for obs in self.obstacles:
-            if obs.inside(p):
-                return False
+            if obs.player_inside(p, height):
+                return True
+        return False
+
+    def is_on_obstacle(self, p):
+        """
+        Determines if the point is on top of an obstacle.
+        :param p: The point to check.
+        :return: True if the point is on an obstacle, False otherwise.
+        """
         for obs in self.obstacles:
             if obs.ontop(p):
                 return True
-
-    def is_walkable(self, p):
-        """
-        Determines if a point is walkable or not.
-        :param p: A tuple (x, y, z).
-        :return: True if the point is walkable, False otherwise.
-        """
-        if p[1] in self.walkable.keys():
-            for q in self.walkable[p[1]]:
-                if (q[0] < p[0] < q[0] + 1 and
-                        q[1] < p[2] < q[1] + 1):
-                    return True
         return False
+
+    def is_point_valid(self, p):
+        """
+        Determines if the specified point is inside the bounds of the map and is not an obstacle.
+        :param p: The point to check.
+        :return: True if the point is valid, False otherwise.
+        """
+        return self.point_inside(p) and self.is_on_obstacle(p) and not self.is_point_blocked(p)
+
+    def is_player_move_valid(self, p, height=2):
+        """
+        Determines if a player can move to the specified location.
+        :param p: The point to check.
+        :param height: The height of the player in units >= 1.
+        :return: True if the move is valid, False otherwise.
+        """
+        return self.player_inside(p) and self.is_on_obstacle(p) and not self.is_player_blocked(p, height)
