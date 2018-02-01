@@ -13,7 +13,7 @@ import pycuda.gpuarray as gpuarray
 from pycuda.elementwise import ElementwiseKernel as Elementwise
 
 import util
-from berkeley import PriorityQueue
+from structures import PriorityQueue
 from nodes import ListNode, TreeNode
 from world import World
 
@@ -203,7 +203,7 @@ class Agent(object):
         closed_list = set()
         node = ListNode(self.start, None)
         node.set_gscore(0)
-        open_list.push(node, 0)
+        open_list.enqueue(0, node)
         while not open_list.isEmpty():
             current = open_list.pop()
             if self.is_goal(current.get_position()):
@@ -214,7 +214,7 @@ class Agent(object):
                         continue
                     node = ListNode(neighbor, current)
                     node.set_gscore(current.get_gscore() + util.cost(current.get_position(), node.get_position()))
-                    open_list.push(node, node.get_gscore() + util.heuristic(node.get_position(), self.goal))
+                    open_list.enqueue(node.get_gscore() + util.heuristic(node.get_position(), self.goal), node)
                 closed_list.add(current.get_position())
         return []
 
