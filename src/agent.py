@@ -6,6 +6,9 @@ import sys
 import random
 import numpy
 
+from multiprocessing import pool
+from multiprocessing.dummy import Pool as ThreadPool
+
 import pycuda.autoinit
 import pycuda.driver as driver
 import pycuda.compiler as compiler
@@ -39,14 +42,14 @@ MAPS_RRT_TREE = ["../out/RRT_Tree_Map1.csv",
                   "../out/RRT_Tree_Map2.csv",
                   "../out/RRT_Tree_Map3.csv",
                   "../out/RRT_Tree_Map4.csv"]
-MISSION_FILES = ['./missions/pp_maze_one.xml',
-                  './missions/pp_maze_two.xml',
-                  './missions/pp_maze_three.xml',
-                  './missions/pp_maze_four.xml']
-MISSION_TEXT_FILES = ['./missions/pp_maze_one.txt',
-                      './missions/pp_maze_two.txt',
-                      './missions/pp_maze_three.txt',
-                      './missions/pp_maze_four.txt']
+MISSION_FILES = ["./missions/pp_maze_one.xml",
+                  "./missions/pp_maze_two.xml",
+                  "./missions/pp_maze_three.xml",
+                  "./missions/pp_maze_four.xml"]
+MISSION_TEXT_FILES = ["./missions/pp_maze_one.txt",
+                      "./missions/pp_maze_two.txt",
+                      "./missions/pp_maze_three.txt",
+                      "./missions/pp_maze_four.txt"]
 MISSION_LOWER_BOUNDS = [(-24, 55, -24), (-24, 55, -24), (-25, 53, -24), (-24, 55, -24)]
 MISSION_UPPER_BOUNDS = [(26, 70, 25), (25, 70, 25), (25, 70, 25), (25, 70, 25)]
 MISSION_START = (0.5, 56, 24.5)
@@ -84,20 +87,18 @@ mod = Elementwise(
 
 class Agent(object):
 
-    def __init__(self, start, goal, alpha=0.05, beta=3.25, epsilon=3.0, p_goal=.05, max_nodes=5000):
+    def __init__(self, start, goal, epsilon=3.0, p_goal=.05, max_nodes=5000):
         """
         Creates a representation of a pathfinding agent.
-        :param start: The starting node of the agent.
-        :param goal: The goal node of the agent.
-        :param alpha: The probability of sampling.
-        :param beta: A modifier that affects sampling.
-        :param epsilon: The maximum distance between nodes.
-        :param max_nodes: The maximum amount of nodes an rrt agent can generate.
+        start: The starting node of the agent.
+        goal: The goal node of the agent.
+        alpha: The probability of sampling.
+        beta: A modifier that affects sampling.
+        epsilon: The maximum distance between nodes.
+        max_nodes: The maximum amount of nodes an rrt agent can generate.
         """
         self.start = start
         self.goal = goal
-        self.alpha = alpha
-        self.beta = beta
         self.epsilon = epsilon
         self.goal_probability = p_goal
         self.max_nodes = max_nodes
@@ -107,105 +108,75 @@ class Agent(object):
     def get_start(self):
         """
         Gets the starting state of the agent.
-        :return: The starting state of the agent.
+        returns: The starting state of the agent.
         """
         return self.start
 
     def get_goal(self):
         """
         Gets the goal state of the agent.
-        :return: The starting state of the agent.
+        returns: The starting state of the agent.
         """
         return self.goal
-
-    def get_alpha(self):
-        """
-        The probability used when sampling in rrt.
-        :return: Gets the probability used when sampling in rrt.
-        """
-        return self.alpha
-
-    def get_beta(self):
-        """
-        Gets the modifier used when sampling in rrt.
-        :return: The modifier used when sampling in rrt.
-        """
-        return self.beta
 
     def get_epsilon(self):
         """
         Gets the maximum amount of distance allowed between nodes in rrt.
-        :return: The maximum distance allowed between each node in rrt.
+        returns: The maximum distance allowed between each node in rrt.
         """
         return self.epsilon
 
     def get_max_nodes(self):
         """
         Gets the maximum amount of nodes rrt can generate.
-        :return: The maximum amount of node rrt can generate.
+        returns: The maximum amount of node rrt can generate.
         """
         return self.max_nodes
 
     def set_start(self, start):
         """
         Sets the starting state of the agent.
-        :param start: The starting state of the agent.
-        :return: N/A
+        start: The starting state of the agent.
+        returns: N/A
         """
         self.start = start
 
     def set_goal(self, goal):
         """
         Sets the goal state of the agent.
-        :param goal: The goal state of the agent.
-        :return: N/A
+        goal: The goal state of the agent.
+        returns: N/A
         """
         self.goal = goal
-
-    def set_alpha(self, alpha):
-        """
-        Sets the probability used when sampling.
-        :param alpha: A probability between 0 and 1. Small values work best.
-        :return: N/A
-        """
-        self.alpha = alpha
-
-    def set_beta(self, beta):
-        """
-        Sets the modifier used when sampling in rrt.
-        :param beta: The new sampling modifier.
-        :return: N/A
-        """
-        self.beta = beta
 
     def set_epsilon(self, epsilon):
         """
         Sets the maximum distance between nodes in rrt.
-        :param epsilon: The maximum distance between nodes in rrt.
-        :return: N/A
+        epsilon: The maximum distance between nodes in rrt.
+        returns: N/A
         """
         self.epsilon = epsilon
 
     def set_max_nodes(self, max_nodes):
         """
         Sets the max amount of nodes that rrt can generate.
-        :param max_nodes: The maximum amount of nodes.
-        :return: N?A
+        max_nodes: The maximum amount of nodes.
+        returns: N?A
         """
         self.max_nodes = max_nodes
 
     def astar(self):
         """
         Finds a path using the A* search algorithm.
-        :return: A path if there is one otherwise an empty list.
+        returns: A path if there is one otherwise an empty list.
         """
         open_list = PriorityQueue()
         closed_list = set()
         node = ListNode(self.start, None)
         node.set_gscore(0)
         open_list.enqueue(0, node)
-        while not open_list.isEmpty():
-            current = open_list.pop()
+        while not open_list.empty():
+            current = open_list.dequeue()
             if self.is_goal(current.get_position()):
                 return util.reconstruct_path(current)
             if current.get_position() not in closed_list:
@@ -221,7 +192,7 @@ class Agent(object):
     def clear(self):
         """
         Prepares the agent for deletion.
-        :return: N/A
+        returns: N/A
         """
         self.traversed.clear()
         self.world.clear()
@@ -231,11 +202,11 @@ class Agent(object):
     def create_world(self, xdims, ydims, zdims, filename):
         """
         Creates a representation of the missions world.
-        :param xdims: The dimensions of the world in the x axis (length).
-        :param ydims: The dimensions of the world in the y axis (height).
-        :param zdims: The dimensions of the world in the z axis (width).
-        :param filename: The filename of the file that contains the layout of the mission.
-        :return: N/A
+        xdims: The dimensions of the world in the x axis (length).
+        ydims: The dimensions of the world in the y axis (height).
+        zdims: The dimensions of the world in the z axis (width).
+        filename: The filename of the file that contains the layout of the mission.
+        returns: N/A
         """
         if not xdims or not ydims or not zdims or not filename:
             raise ValueError
@@ -275,8 +246,8 @@ class Agent(object):
     def generate_neighbors(self, p):
         """
         Generates octilian neighbors from the given point.
-        :param p: The point to generate neighbors for.
-        :return: A list containing points from.
+        p: The point to generate neighbors for.
+        returns: A list containing points from.
         """
         neighbors = []
         for dx in DIFF:
@@ -292,24 +263,24 @@ class Agent(object):
     def is_goal(self, p):
         """
         Determines if the specified point is the goal node or not.
-        :param p: The point to check.
-        :return: True if the point is a goal, False otherwise.
+        p: The point to check.
+        return: True if the point is a goal, False otherwise.
         """
         return p == self.goal
 
     def line_of_sight(self, p1, p2):
         """
         Determines line of sight from p1 to p2.
-        :param p1: The observing point.
-        :param p2: The observed point.
-        :return: True if there is line of sight from p1 to p2, False otherwise.
+        p1: The observing point.
+        p2: The observed point.
+        return: True if there is line of sight from p1 to p2, False otherwise.
         """
         def points_on_line(q, r):
             """
             Recursively generates all the points on the line defined by q anr r.
-            :param q: The first terminus on the line.
-            :param r: The second terminus on the line.
-            :return: A list containing all'' the points on the line from q to r.
+            q: The first terminus on the line.
+            r: The second terminus on the line.
+            return: A list containing all'' the points on the line from q to r.
             """
             if util.dist(q, r) < 1.0:
                 return []
@@ -323,10 +294,64 @@ class Agent(object):
                     return False
         return True
 
+    def parallel_rrt(self):
+        """
+        Finds a path utilizing a parallelized version of RRT, which splits the search space into sections, 
+        and recombines them for a solution.
+        return: A path if it is found, otherwise an empty list.
+        """
+        def find(region):
+            """
+            Runs rrt on the region of space.
+            region: Nodes from the search space.
+            """
+            # Initialize nodes with a random starting location
+            nodes = [ListNode(region.pop(random.randint(0, len(region)-1)))]
+            while region:
+                # Mini implementation of rrt
+                rand = region.pop(random.randint(0, len(region)-1))
+                nn = nodes[0]
+                for p in nodes:
+                    if (util.dist(p.get_position(), rand) < 
+                            util.dist(nn.get_position(), rand)):
+                        nn = p
+                newnode = self.step_from_to(nn.get_position(), rand)
+                nodes.append(ListNode(newnode, nn))
+            return nodes
+
+        # Create the search regions
+        regions = [[], [], [], []]
+        for p in self.world.walkable:
+            # Region 1
+            if (self.world.get_x_lower() < p[0] <= self.world.get_x_upper()//2 and
+                        self.world.get_z_upper()//2 < p[2] < self.world.get_z_upper()):
+                regions[0].append(p)
+            # Region 2
+            elif (self.world.get_x_upper()//2 < p[0] < self.world.get_x_upper() and
+                        self.world.get_z_upper()//2 < p[2] < self.world.get_z_upper()):
+                regions[1].append(p)
+            # Region 3
+            elif (self.world.get_x_lower() < p[0] <= self.world.get_x_upper()//2 and
+                        self.world.get_z_lower() < p[2] <= self.world.get_z_upper()//2):
+                regions[2].append(p)
+            # Region 4
+            elif (self.world.get_x_upper()//2 < p[0] < self.world.get_x_upper() and
+                        self.world.get_z_lower() < p[2] <= self.world.get_z_upper()//2):
+                regions[3].append(p)
+        # Create the pool
+        pool = ThreadPool(8)
+        # Call the pool
+        subtrees = pool.map(find, regions)
+        # Close the pool and wait for work to finish
+        pool.close()
+        pool.join()
+        #TODO: Recombine all subtrees into a tree and draw the path
+
+
     def random(self):
         """
         Randomly samples a point from walkable space. Has a user defined percentage to sample the goal.
-        :return: A randomly sampled point from available walkable space.
+        returns: A randomly sampled point from available walkable space.
         """
         if random.random() < self.goal_probability:
             return self.goal
@@ -335,14 +360,14 @@ class Agent(object):
     def rrt(self):
         """
         Finds a path in the world using a rapidly exploring random tree.
-        :return: A path if it is found, otherwise an empty list.
+        returns: A path if it is found, otherwise an empty list.
         """
         def neighbor(points, p):
             """
             Finds the nearest neighbor to a point using Tim Sort.
-            :param points: The tree itself.
-            :param p: The point being added to the tree.
-            :return: The point nearest to p in the tree.
+            points: The tree itself.
+            p: The point being added to the tree.
+            return: The point nearest to p in the tree.
             """
             points.sort(key=lambda q: (p[0] - q.get_position()[0]) * (p[0] - q.get_position()[0]) +
                                       (p[1] - q.get_position()[1]) * (p[1] - q.get_position()[1]) +
@@ -393,9 +418,9 @@ class Agent(object):
     def step_from_to(self, p1, p2):
         """
         Adapted from Steven M. Lavalles implementation of RRT and lifted into three dimensions.
-        :param p1: The point being sampled from.
-        :param p2: The point that was randomly sampled.
-        :return: Either the randomly sampled point or a point along the line from p1 to p2.
+        p1: The point being sampled from.
+        p2: The point that was randomly sampled.
+        returns: Either the randomly sampled point or a point along the line from p1 to p2.
         """
         if util.dist(p1, p2) < self.epsilon:
             return p2
@@ -510,13 +535,13 @@ def visualize():
         # Attempt to start a mission:
         my_mission = MalmoPython.MissionSpec(open(MISSION_FILES[i], 'r').read(), False)
         planner = Agent(MISSION_START, MISSION_GOALS[i])
-        planner.create_world((MISSION_LOWER_BOUNDS[j][0], MISSION_UPPER_BOUNDS[j][0]),
-                               (MISSION_LOWER_BOUNDS[j][1], MISSION_UPPER_BOUNDS[j][1]),
-                               (MISSION_LOWER_BOUNDS[j][2], MISSION_UPPER_BOUNDS[j][2]),
-                               MISSION_TEXT_FILES[j])
+        planner.create_world((MISSION_LOWER_BOUNDS[i][0], MISSION_UPPER_BOUNDS[i][0]),
+                               (MISSION_LOWER_BOUNDS[i][1], MISSION_UPPER_BOUNDS[i][1]),
+                               (MISSION_LOWER_BOUNDS[i][2], MISSION_UPPER_BOUNDS[i][2]),
+                               MISSION_TEXT_FILES[i])
         path = planner.rrt()
 
-        if _debug_paths:
+        if BOOL_DEBUG_PATHS:
             w = dict()
             for point in planner.world.walkable:
                 if point[1] in w.keys():
@@ -570,7 +595,19 @@ def visualize():
 
 if __name__ == '__main__':
     # If the switch for Malmo is enabled then run it, otherwise gather some data
-    if _visualize:
-        visualize()
-    else:
-        gather_data(1)
+    #if BOOL_VISUALIZE:
+    #    visualize()
+    #else:
+    #    gather_data(1)
+    agent = None
+    for i in range(1):
+        for j in range(len(MISSION_FILES)):
+            # Attempt to start a mission:
+            agent = Agent(MISSION_START, MISSION_GOALS[j])
+            agent.create_world((MISSION_LOWER_BOUNDS[j][0], MISSION_UPPER_BOUNDS[j][0]),
+                               (MISSION_LOWER_BOUNDS[j][1], MISSION_UPPER_BOUNDS[j][1]),
+                               (MISSION_LOWER_BOUNDS[j][2], MISSION_UPPER_BOUNDS[j][2]),
+                               MISSION_TEXT_FILES[j])
+            rt = time.clock()
+            agent.parallel_rrt()
+            print(time.clock()-rt)

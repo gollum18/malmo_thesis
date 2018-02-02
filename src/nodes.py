@@ -17,6 +17,9 @@ class ListNode(object):
         yield self.position[1]
         yield self.position[2]
 
+    def __str__(self):
+        return "({0}, {1}, {2})".format(self.position[0], self.position[1], self.position[2])
+
     def as_float3(self):
         """
         Returns a float3 object containing the position of this node.
