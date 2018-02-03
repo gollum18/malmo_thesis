@@ -1,6 +1,7 @@
 import math
 import numpy
 
+
 def cost(p1, p2):
     """
     Used by A* to determine the cost of going from p1 to p2.

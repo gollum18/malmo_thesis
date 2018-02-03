@@ -306,18 +306,17 @@ class Agent(object):
             region: Nodes from the search space.
             """
             # Initialize nodes with a random starting location
-            nodes = [ListNode(region.pop(random.randint(0, len(region)-1)))]
+            tree = TreeNode(region.pop(random.randint(0, len(region)-1)))
             while region:
                 # Mini implementation of rrt
                 rand = region.pop(random.randint(0, len(region)-1))
-                nn = nodes[0]
-                for p in nodes:
-                    if (util.dist(p.get_position(), rand) < 
-                            util.dist(nn.get_position(), rand)):
-                        nn = p
-                newnode = self.step_from_to(nn.get_position(), rand)
-                nodes.append(ListNode(newnode, nn))
-            return nodes
+                nn = tree[0]
+                nn = tree.nearest(rand)
+                newnode = self.step_from_to(nn[1], rand)
+                temp = TreeNode(newnode)
+                nn[1].add_child(temp)
+                temp.set_parent(nn[1])
+            return tree
 
         # Create the search regions
         regions = [[], [], [], []]
@@ -345,7 +344,17 @@ class Agent(object):
         # Close the pool and wait for work to finish
         pool.close()
         pool.join()
-        #TODO: Recombine all subtrees into a tree and draw the path
+        start_node = None
+        goal_node = None
+        # Look for the start and goal
+        for tree in subtrees:
+            if start_node and goal_node:
+                break
+            if not start_node:
+                start_node = tree.find(self.start)
+            if not goal_node:
+                goal_node = tree.find(self.goal)
+        # TODO: Recombine the start and goal nodes to form a path
 
 
     def random(self):

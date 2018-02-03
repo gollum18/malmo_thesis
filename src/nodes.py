@@ -115,15 +115,40 @@ class TreeNode(object):
                           + (self.position[1]-position[1])**2
                           + (self.position[2]-position[2])**2)
 
-    def nearest(self, point):
+    def find(self, position):
+        """
+        Finds a node in the tree with the given position.
+        position: The position of the node to find.
+        returns: The node in the tree that contains the given position.
+        """
+        # Check for the terminal nodes
+        if self.position == position:
+            return self
+        elif not self.children:
+            return None
+        # If we did not find the position were looking for and there are children
+        #   then call find on each child
+        node = None
+        for child in self.children:
+            node = child.find(position)
+            if node != None:
+                break
+        return node 
+
+    def nearest(self, position):
+        """
+        Finds the nearest node to the given position.
+        position: The position to find the nearest node of.
+        returns: A tuple containing the nearest nodes distance, and the node itself.
+        """
         # Check for a terminal node
         if not self.children:
-            return (self.distance(point), self)
-        # Iterate through all children, finding the closest point
-        best_dist = self.distance(point)
+            return (self.distance(position), self)
+        # Iterate through all children, finding the closest position
+        best_dist = self.distance(position)
         best_node = self
         for node in self.children:
-            temp = node.nearest(point)
+            temp = node.nearest(position)
             if temp[0] < best_dist:
                 best_dist = temp[0]
                 best_node = temp[1]
