@@ -300,7 +300,7 @@ class Agent(object):
         and recombines them for a solution.
         return: A path if it is found, otherwise an empty list.
         """
-        def find(region):
+        def rrt_region(region):
             """
             Runs rrt on the region of space.
             region: Nodes from the search space.
@@ -340,7 +340,7 @@ class Agent(object):
         # Create the pool
         pool = ThreadPool(8)
         # Call the pool
-        subtrees = pool.map(find, regions)
+        subtrees = pool.map(rrt_region, regions)
         # Close the pool and wait for work to finish
         pool.close()
         pool.join()
@@ -354,8 +354,19 @@ class Agent(object):
                 start_node = tree.find(self.start)
             if not goal_node:
                 goal_node = tree.find(self.goal)
+        if not start_node or not goal_node:
+            return None
         # TODO: Recombine the start and goal nodes to form a path
-
+        # Brute force this guy, sorry!!!!!
+        # FIX THIS SOMETIME PLEASE!!!!!!!!!!!!!!!!!!!!!!!!!!
+        nearest_to_goal = start_node.nearest(goal_node.get_position())[1]
+        goal_start = goal_node
+        while goal_start.get_parent():
+            goal_start = goal_start.get_parent()
+        goal_start = goal_start.nearest(nearest_to_goal.get_position())[1]
+        goal_start.set_parent(nearest_to_goal)
+        # Return the path
+        return util.reconstruct_path(goal_node)
 
     def random(self):
         """
@@ -618,5 +629,5 @@ if __name__ == '__main__':
                                (MISSION_LOWER_BOUNDS[j][2], MISSION_UPPER_BOUNDS[j][2]),
                                MISSION_TEXT_FILES[j])
             rt = time.clock()
-            agent.parallel_rrt()
-            print(time.clock()-rt)
+            path = agent.parallel_rrt()
+            print(path, time.clock()-rt)

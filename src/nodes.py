@@ -131,7 +131,7 @@ class TreeNode(object):
         node = None
         for child in self.children:
             node = child.find(position)
-            if node != None:
+            if node:
                 break
         return node 
 

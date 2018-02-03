@@ -58,6 +58,6 @@ def reconstruct_path(node):
     """
     path = []
     while node.get_parent():
-        path.append(n.get_position())
-        n = n.get_parent()
+        path.append(node.get_position())
+        node = node.get_parent()
     return path
