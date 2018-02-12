@@ -26,22 +26,26 @@ import MalmoPython
 # Program Constants
 #
 
-MAPS_ASTAR = ["../out/AStar_Map1.csv",
-               "../out/AStar_Map2.csv",
-               "../out/AStar_Map3.csv",
-               "../out/AStar_Map4.csv"]
-MAPS_RRT = ["../out/RRT_List_Map1.csv",
-             "../out/RRT_list_Map2.csv",
-             "../out/RRT_List_Map3.csv",
-             "../out/RRT_List_Map4.csv"]
-MAPS_RRT_GPU = ["../out/RRT_GPU_Map1.csv",
-                 "../out/RRT_GPU_Map2.csv",
-                 "../out/RRT_GPU_Map3.csv",
-                 "../out/RRT_GPU_Map4.csv"]
-MAPS_RRT_TREE = ["../out/RRT_Tree_Map1.csv",
-                  "../out/RRT_Tree_Map2.csv",
-                  "../out/RRT_Tree_Map3.csv",
-                  "../out/RRT_Tree_Map4.csv"]
+MAPS_ASTAR = ["../raw/AStar_Map1.csv",
+               "../raw/AStar_Map2.csv",
+               "../raw/AStar_Map3.csv",
+               "../raw/AStar_Map4.csv"]
+MAPS_RRT = ["../raw/RRT_List_Map1.csv",
+             "../raw/RRT_List_Map2.csv",
+             "../raw/RRT_List_Map3.csv",
+             "../raw/RRT_List_Map4.csv"]
+MAPS_RRT_GPU = ["../raw/RRT_GPU_Map1.csv",
+                 "../raw/RRT_GPU_Map2.csv",
+                 "../raw/RRT_GPU_Map3.csv",
+                 "../raw/RRT_GPU_Map4.csv"]
+MAPS_RRT_TREE = ["../raw/RRT_Tree_Map1.csv",
+                  "../raw/RRT_Tree_Map2.csv",
+                  "../raw/RRT_Tree_Map3.csv",
+                  "../raw/RRT_Tree_Map4.csv"]
+MAPS_RRT_THREADED = ["../raw/RRT_Threaded_Map1.csv",
+                     "../raw/RRT_Threaded_Map2.csv",
+                     "../raw/RRT_Threaded_Map3.csv",
+                     "../raw/RRT_Threaded_Map4.csv"]
 MISSION_FILES = ["./missions/pp_maze_one.xml",
                   "./missions/pp_maze_two.xml",
                   "./missions/pp_maze_three.xml",
@@ -61,7 +65,8 @@ DIFF = [-1, 0, 1]
 # Switches for debugging
 BOOL_VISUALIZE = False
 BOOL_GPU = False
-BOOL_TREE = True
+BOOL_TREE = False
+BOOL_THREADED = True
 BOOL_DEBUG_PATHS = False
 
 def get_file_name(index, alg):
@@ -69,10 +74,12 @@ def get_file_name(index, alg):
         return MAPS_ASTAR[index]
     else:
         if not BOOL_GPU:
-            if not BOOL_TREE:
-                return MAPS_RRT[index]
-            else:
+            if BOOL_THREADED:
+                return MAPS_RRT_THREADED[index]
+            elif BOOL_TREE:
                 return MAPS_RRT_TREE[index]
+            else:
+                return MAPS_RRT[index]
         else:
             return MAPS_RRT_GPU[index]
 
@@ -294,7 +301,16 @@ class Agent(object):
                     return False
         return True
 
-    def parallel_rrt(self):
+    def random(self):
+        """
+        Randomly samples a point from walkable space. Has a user defined percentage to sample the goal.
+        returns: A randomly sampled point from available walkable space.
+        """
+        if random.random() < self.goal_probability:
+            return self.goal
+        return random.sample(self.world.walkable - self.traversed, 1)[0]
+
+    def regioned_rrt(self):
         """
         Finds a path utilizing a parallelized version of RRT, which splits the search space into sections, 
         and recombines them for a solution.
@@ -341,9 +357,6 @@ class Agent(object):
         pool = ThreadPool(8)
         # Call the pool
         subtrees = pool.map(rrt_region, regions)
-        # Close the pool and wait for work to finish
-        pool.close()
-        pool.join()
         start_node = None
         goal_node = None
         # Look for the start and goal
@@ -367,15 +380,6 @@ class Agent(object):
         goal_start.set_parent(nearest_to_goal)
         # Return the path
         return util.reconstruct_path(goal_node)
-
-    def random(self):
-        """
-        Randomly samples a point from walkable space. Has a user defined percentage to sample the goal.
-        returns: A randomly sampled point from available walkable space.
-        """
-        if random.random() < self.goal_probability:
-            return self.goal
-        return random.sample(self.world.walkable - self.traversed, 1)[0]
 
     def rrt(self):
         """
@@ -456,6 +460,45 @@ class Agent(object):
                     return w
         return self.step_from_to(p1, self.random())
 
+    def threaded_rrt(self):
+        def neighbor(neighbors):
+            nearest = neighbors[0]
+            dist = float("inf")
+            for p in nodes:
+                temp = util.dist(p.get_position(), rand)
+                if (temp < util.dist(nearest.get_position(), rand)):
+                    nearest = p
+                    dist = temp
+            return nearest, dist
+
+        nodes = [ListNode(self.start)]
+        pool = ThreadPool(8)
+        for iteration in range(self.max_nodes):
+            rand = self.random()
+            nn = nodes[0]
+            if len(nodes) >= 64:
+                div = len(nodes) // 8
+                nn = min(pool.map(neighbor, 
+                            [nodes[0:div*1], nodes[div*1+1:div*2],
+                             nodes[div*2+1:div*3], nodes[div*3+1:div*4],
+                             nodes[div*4+1:div*5], nodes[div*5+1:div*6],
+                             nodes[div*6+1:div*7], nodes[div*7+1:len(nodes)]]),
+                            key=lambda t: t[1])[0]
+            else:
+                for p in nodes:
+                    if (util.dist(p.get_position(), rand) < 
+                            util.dist(nn.get_position(), rand)):
+                        nn = p
+            newnode = self.step_from_to(nn.get_position(), rand)
+            nodes.append(ListNode(newnode, nn))
+            if self.is_goal(nodes[-1].get_position()):
+                pool.close()
+                pool.join()
+                return util.reconstruct_path(nodes[-1])
+        pool.close()
+        pool.join()
+        return None
+
 def gather_data(alg=0, iterations=1000):
     """
     Gathers data on the pathfinding algorithms.
@@ -487,7 +530,7 @@ def gather_data(alg=0, iterations=1000):
             if alg == 0:
                 path = agent.astar()
             else:
-                path = agent.rrt()
+                path = agent.rrt() if not BOOL_THREADED else agent.threaded_rrt()
             if not path:
                 if j == 0:
                     out1.write("{0},{1},{2},{3}\n"
@@ -615,19 +658,7 @@ def visualize():
 
 if __name__ == '__main__':
     # If the switch for Malmo is enabled then run it, otherwise gather some data
-    #if BOOL_VISUALIZE:
-    #    visualize()
-    #else:
-    #    gather_data(1)
-    agent = None
-    for i in range(1):
-        for j in range(len(MISSION_FILES)):
-            # Attempt to start a mission:
-            agent = Agent(MISSION_START, MISSION_GOALS[j])
-            agent.create_world((MISSION_LOWER_BOUNDS[j][0], MISSION_UPPER_BOUNDS[j][0]),
-                               (MISSION_LOWER_BOUNDS[j][1], MISSION_UPPER_BOUNDS[j][1]),
-                               (MISSION_LOWER_BOUNDS[j][2], MISSION_UPPER_BOUNDS[j][2]),
-                               MISSION_TEXT_FILES[j])
-            rt = time.clock()
-            path = agent.parallel_rrt()
-            print(path, time.clock()-rt)
+    if BOOL_VISUALIZE:
+        visualize()
+    else:
+        gather_data(1)
