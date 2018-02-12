@@ -1,0 +1,21 @@
+{
+    "name": "Christen Ford",
+    "url":"https://github.com/gollum18/malmo_thesis/issues",
+    "email":"cford15@mail.bw.edu",
+    "license": "SEE LICENSE IN LICENSE",
+    "directories": {
+        "src":"./src",
+        "raw":"./raw",
+        "stats":"./stats"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/gollum18/malmo_thesis"
+    },
+    "dependencies": {
+      "pycuda":">=2017.1.1",
+      "numpy":">=1.14.0",
+      "pandas":">=0.22.0",
+      "statsmodels":">=0.8.0"
+    }
+}
