@@ -16,6 +16,8 @@
       "pycuda":">=2017.1.1",
       "numpy":">=1.14.0",
       "pandas":">=0.22.0",
-      "statsmodels":">=0.8.0"
+      "statsmodels":">=0.8.0",
+      "seaborn":">=0.8.1",
+      "python":">=3.6.4"
     }
 }

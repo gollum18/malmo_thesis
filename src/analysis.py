@@ -3,7 +3,9 @@
 import numpy
 import pandas
 
-import statsmodels.formula.api as sm
+import seaborn as sns
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
 
 import agent
 
@@ -19,6 +21,8 @@ STATS_FILES = ["../stats/astar_stats.txt",
 STATS_FILE_HEADERS = ["A* Statistics:",
                         "RRT Statistics:", 
                         "CPU Threaded RRT Statistics:"]
+OLS_FORMULA = "{0} ~ {1} + {2} + {3}".format(agent.CSV_HEADERS[0], agent.CSV_HEADERS[1],
+                    agent.CSV_HEADERS[2], agent.CSV_HEADERS[3])
 
 def get_pandas_data():
     """
@@ -39,19 +43,33 @@ def get_pandas_data():
 
     return astar_frames, rrt_frames, rrt_threaded_frames
 
+def seaborn_plot(pandas_data):
+    """
+    Outputs a plot of all data using seaborn.
+    """
+    for i in range(len(pandas_data)):
+        for j in range(len(pandas_data[i])):
+            sns.regplot(x=agent.CSV_HEADERS[2], y=agent.CSV_HEADERS[3], data=pandas_data[i][j])
+
 def write_models_to_file(pandas_data):
+    """
+    Writes statistical models from the files contained in out to file.
+    """
     for i in range(len(pandas_data)):
         with open(MODELS_FILES[i], 'w') as f:
             f.write(("-"*80) + "\n")
             f.write(MODELS_FILE_HEADERS[i] + "\n")
             f.write(("-"*80) + "\n")
-            for j in range(len(pandas_data)):
-                f.write("Map " + str(i+1) + ":\n")
-                f.write(str(sm.ols(formula="", data=pandas_data[i][j]).fit()) + "\n")
+            for j in range(len(pandas_data[0])):
+                f.write("Map " + str(j+1) + " Type 2 Anova:\n")
+                f.write(str(sm.stats.anova_lm(ols(formula=OLS_FORMULA, data=pandas_data[i][j]).fit(), typ=2)) + "\n")
                 if i < 3: f.write("\n")
             f.write(("-" * 80) + "\n")
 
 def write_stats_to_file(pandas_data):
+    """
+    Writes statistics from the files contained in out to file.
+    """
     for iteration in range(len(pandas_data)):
         with open(STATS_FILES[iteration], 'w') as f:
             f.write(("-" * 80) + "\n")
@@ -65,4 +83,4 @@ def write_stats_to_file(pandas_data):
 
 if __name__ == '__main__':
     data = get_pandas_data()
-    write_stats_to_file(data)
+    seaborn_plot(data)

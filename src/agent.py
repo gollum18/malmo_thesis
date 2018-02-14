@@ -26,6 +26,7 @@ import MalmoPython
 # Program Constants
 #
 
+CSV_HEADERS = ["RT","PL","HC","DEG"]
 MAPS_ASTAR = ["../raw/AStar_Map1.csv",
                "../raw/AStar_Map2.csv",
                "../raw/AStar_Map3.csv",
@@ -64,9 +65,9 @@ DIFF = [-1, 0, 1]
 
 # Switches for debugging
 BOOL_VISUALIZE = False
-BOOL_GPU = False
+BOOL_GPU = True
 BOOL_TREE = False
-BOOL_THREADED = True
+BOOL_THREADED = False
 BOOL_DEBUG_PATHS = False
 
 def get_file_name(index, alg):
@@ -266,6 +267,41 @@ class Agent(object):
                     if self.world.is_player_move_valid(n):
                         neighbors.append(n)
         return neighbors
+
+    def gpu_rrt(self):
+        node_count = 1
+        nodes = [ListNode(self.start)]
+        neighbors = numpy.zeros(shape=(50, 50, 2), dtype=gpuarray.vec.float3)
+        neighbors[0, 0, 0] = nodes[0].as_float3()
+        x = 1
+        y = 0
+        z = 0
+        results = gpuarray.zeros(shape=(50, 50, 2), dtype=numpy.float32)
+        for i in range(1, self.max_nodes):
+            # Generate a node
+            rand = self.random()
+            mod(gpuarray.vec.make_float3(*rand), gpuarray.to_gpu(neighbors), results)
+            temp = results.ravel().get()
+            best = temp[0]
+            bestNode = nodes[0]
+            for j in range(len(nodes)):
+                if temp[j] < best:
+                    best = temp[j]
+                    bestNode = nodes[j]
+            newnode = self.step_from_to(rand, bestNode.get_position())
+            # Add the node to the nodes list
+            nodes.append(ListNode(newnode, bestNode))
+            neighbors[x, y, z] = nodes[-1].as_float3()
+            if self.is_goal(nodes[-1].get_position()):
+                return util.reconstruct_path(nodes[-1])
+            x += 1
+            if x == 50:
+                x = 0
+                y += 1
+                if y == 50:
+                    y = 0
+                    z += 1
+        return []
 
     def is_goal(self, p):
         """
@@ -512,7 +548,8 @@ def gather_data(alg=0, iterations=1000):
     out2 = open(get_file_name(1, alg), 'w')
     out3 = open(get_file_name(2, alg), 'w')
     out4 = open(get_file_name(3, alg), 'w')
-    header = "Run Time,Path Length,Heading Changes,Total Degrees (Degrees)\n"
+    header = "{0},{1},{2},{3}\n".format(CSV_HEADERS[0], CSV_HEADERS[1], 
+                                        CSV_HEADERS[2], CSV_HEADERS[3])
     out1.write(header)
     out2.write(header)
     out3.write(header)
@@ -530,7 +567,7 @@ def gather_data(alg=0, iterations=1000):
             if alg == 0:
                 path = agent.astar()
             else:
-                path = agent.rrt() if not BOOL_THREADED else agent.threaded_rrt()
+                path = agent.threaded_rrt() if BOOL_THREADED else (agent.gpu_rrt() if BOOL_GPU else agent.rrt())
             if not path:
                 if j == 0:
                     out1.write("{0},{1},{2},{3}\n"
