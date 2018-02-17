@@ -269,7 +269,6 @@ class Agent(object):
         return neighbors
 
     def gpu_rrt(self):
-        node_count = 1
         nodes = [ListNode(self.start)]
         neighbors = numpy.zeros(shape=(50, 50, 2), dtype=gpuarray.vec.float3)
         neighbors[0, 0, 0] = nodes[0].as_float3()
@@ -282,16 +281,12 @@ class Agent(object):
             rand = self.random()
             mod(gpuarray.vec.make_float3(*rand), gpuarray.to_gpu(neighbors), results)
             temp = results.ravel().get()
-            best = temp[0]
-            bestNode = nodes[0]
-            for j in range(len(nodes)):
-                if temp[j] < best:
-                    best = temp[j]
-                    bestNode = nodes[j]
-            newnode = self.step_from_to(rand, bestNode.get_position())
+            nn = nodes[numpy.argmin(temp[0:len(nodes)])]
+            newnode = self.step_from_to(nn.get_position(), rand)
             # Add the node to the nodes list
-            nodes.append(ListNode(newnode, bestNode))
+            nodes.append(ListNode(newnode, nn))
             neighbors[x, y, z] = nodes[-1].as_float3()
+            self.traversed.add(newnode)
             if self.is_goal(nodes[-1].get_position()):
                 return util.reconstruct_path(nodes[-1])
             x += 1
@@ -607,6 +602,11 @@ def gather_data(alg=0, iterations=1000):
             elif j == 3:
                 out4.write("{0},{1},{2},{3}\n"
                            .format(runtime, pathlength, hchanges, degrees))
+        if i % 50 == 0:
+            out1.flush()
+            out2.flush()
+            out3.flush()
+            out4.flush()
     out1.close()
     out2.close()
     out3.close()
