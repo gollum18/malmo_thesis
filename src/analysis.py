@@ -11,16 +11,20 @@ import agent
 
 MODELS_FILES = ["../stats/astar_models.txt", 
                 "../stats/rrt_models.txt", 
-                "../stats/threaded_rrt_models.txt"]
+                "../stats/threaded_rrt_models.txt",
+                "../stats/gpu_rrt_models.txt"]
 MODELS_FILE_HEADERS = ["A* Models:",
                         "RRT Models:", 
-                        "CPU Threaded RRT Models:"]
+                        "CPU Threaded RRT Models:",
+                        "GPU RRT Models:"]
 STATS_FILES = ["../stats/astar_stats.txt", 
                 "../stats/rrt_stats.txt", 
-                "../stats/threaded_rrt_stats.txt"]
+                "../stats/threaded_rrt_stats.txt",
+                "../stats/gpu_rrt_stats.txt"]
 STATS_FILE_HEADERS = ["A* Statistics:",
                         "RRT Statistics:", 
-                        "CPU Threaded RRT Statistics:"]
+                        "CPU Threaded RRT Statistics:",
+                        "GPU RRT Statistics:"]
 OLS_FORMULA = "{0} ~ {1} + {2} + {3}".format(agent.CSV_HEADERS[0], agent.CSV_HEADERS[1],
                     agent.CSV_HEADERS[2], agent.CSV_HEADERS[3])
 
@@ -31,8 +35,9 @@ def get_pandas_data():
     astar_frames = []
     rrt_frames = []
     rrt_threaded_frames = []
+    gpu_frames = []
 
-    for array in [agent.MAPS_ASTAR, agent.MAPS_RRT, agent.MAPS_RRT_THREADED]:
+    for array in [agent.MAPS_ASTAR, agent.MAPS_RRT, agent.MAPS_RRT_THREADED, agent.MAPS_RRT_GPU]:
         for filename in array:
             if array == agent.MAPS_ASTAR:
                 astar_frames.append(pandas.read_csv(filepath_or_buffer=filename, memory_map=True, header=0))
@@ -40,8 +45,10 @@ def get_pandas_data():
                 rrt_frames.append(pandas.read_csv(filepath_or_buffer=filename, memory_map=True, header=0))
             elif array == agent.MAPS_RRT_THREADED:
                 rrt_threaded_frames.append(pandas.read_csv(filepath_or_buffer=filename, memory_map=True, header=0))
+            elif array == agent.MAPS_RRT_GPU:
+                gpu_frames.append(pandas.read_csv(filepath_or_buffer=filename, memory_map=True, header=0))
 
-    return astar_frames, rrt_frames, rrt_threaded_frames
+    return astar_frames, rrt_frames, rrt_threaded_frames, gpu_frames
 
 def seaborn_plot(pandas_data):
     """
@@ -83,4 +90,4 @@ def write_stats_to_file(pandas_data):
 
 if __name__ == '__main__':
     data = get_pandas_data()
-    seaborn_plot(data)
+    write_stats_to_file(data)

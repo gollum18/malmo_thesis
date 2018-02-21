@@ -62,6 +62,8 @@ MISSION_GOALS = [(0.5, 56, -23.5), (0.5, 58, -23.5), (0.5, 54, -23.5), (0.5, 56,
 
 # Needed by the neighbor generation algorithm
 DIFF = [-1, 0, 1]
+X_DIM = 80
+Y_DIM = 64
 
 # Switches for debugging
 BOOL_VISUALIZE = False
@@ -100,8 +102,6 @@ class Agent(object):
         Creates a representation of a pathfinding agent.
         start: The starting node of the agent.
         goal: The goal node of the agent.
-        alpha: The probability of sampling.
-        beta: A modifier that affects sampling.
         epsilon: The maximum distance between nodes.
         max_nodes: The maximum amount of nodes an rrt agent can generate.
         """
@@ -199,13 +199,10 @@ class Agent(object):
 
     def clear(self):
         """
-        Prepares the agent for deletion.
+        Empties the traversed list for a new run.
         returns: N/A
         """
         self.traversed.clear()
-        self.world.clear()
-        del self.traversed
-        del self.world
 
     def create_world(self, xdims, ydims, zdims, filename):
         """
@@ -279,9 +276,15 @@ class Agent(object):
         for i in range(1, self.max_nodes):
             # Generate a node
             rand = self.random()
-            mod(gpuarray.vec.make_float3(*rand), gpuarray.to_gpu(neighbors), results)
-            temp = results.ravel().get()
-            nn = nodes[numpy.argmin(temp[0:len(nodes)])]
+            if (i % 8 == 0):
+                mod(gpuarray.vec.make_float3(*rand), gpuarray.to_gpu(neighbors), results)
+                temp = results.ravel().get()
+                nn = nodes[numpy.argmin(temp[0:len(nodes)])]
+            else:
+                nn = nodes[0]
+                for p in nodes:
+                    if (util.dist(rand, p.get_position()) < util.dist(rand, nn.get_position())):
+                        nn = p
             newnode = self.step_from_to(nn.get_position(), rand)
             # Add the node to the nodes list
             nodes.append(ListNode(newnode, nn))
@@ -436,33 +439,19 @@ class Agent(object):
             nn = None
             newnode = None
             # Runs Tim sort on the CPU to find nearest neighbor
-            if not BOOL_GPU:
-                if not BOOL_TREE:
-                    nn = neighbor(nodes, rand)
-                    newnode = self.step_from_to(nn.get_position(), rand)
-                    nodes.append(ListNode(newnode, nn))
-                    if self.is_goal(nodes[-1].get_position()):
-                        return util.reconstruct_path(nodes[-1])
-                else:
-                    nn = nodes.nearest(rand)
-                    newnode = self.step_from_to(nn[1], rand)
-                    temp = TreeNode(newnode)
-                    nn[1].add_child(temp)
-                    temp.set_parent(nn[1])
-                    self.traversed.add(newnode)
-                    if self.is_goal(temp.get_position()):
-                        return util.reconstruct_path(temp)
-            # Runs NN on the GPU
+            if not BOOL_TREE:
+                nn = neighbor(nodes, rand)
+                newnode = self.step_from_to(nn.get_position(), rand)
+                nodes.append(ListNode(newnode, nn))
             else:
-                # TODO: Need to convert nodes over to a list of tuples
-                # Note mod has the following signature
-                #   float3 point, float3 * neighbors, float3 * results
-                neighbors = gpuarray.to_gpu(numpy.asarray([tuple(n) for n in nodes]))
-                results = gpuarray.zeros_like(neighbors, dtype=gpuarray.vec.float3)
-                mod(gpuarray.vec.make_float3(*rand), neighbors, results)
-                # TODO: Need to get the data passed into the gpu in a way
-                #   it can work with
+                nn = nodes.nearest(rand)
+                newnode = self.step_from_to(nn[1], rand)
+                temp = TreeNode(newnode)
+                temp.set_parent(nn[1])
+                nn[1].add_child(temp)
             self.traversed.add(newnode)
+            if self.is_goal(temp.get_position()):
+                return util.reconstruct_path(temp)
             # From Steven M. Lavalles implementation
             #for p in nodes:
             #    if dist(p.get_position(), rand) < dist(nn.get_position(), rand):
@@ -695,7 +684,8 @@ def visualize():
 
 if __name__ == '__main__':
     # If the switch for Malmo is enabled then run it, otherwise gather some data
-    if BOOL_VISUALIZE:
-        visualize()
-    else:
-        gather_data(1)
+    #if BOOL_VISUALIZE:
+    #    visualize()
+    #else:
+    #    gather_data(1)
+    Agent.gpu_rrt()
