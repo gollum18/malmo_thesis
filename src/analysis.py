@@ -2,12 +2,18 @@
 
 import numpy
 import pandas
+import random
+import statistics
 
 import seaborn as sns
+import statsmodels.stats as stats
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
 
 import agent
+
+SAMPLE_SIZE = 200
+KEYS = ["RT", "PL", "HC", "DEG"]
 
 MODELS_FILES = ["../stats/astar_models.txt", 
                 "../stats/rrt_models.txt", 
@@ -50,6 +56,80 @@ def get_pandas_data():
 
     return astar_frames, rrt_frames, rrt_threaded_frames, gpu_frames
 
+def random_sample(pandas_data):
+    """
+    Returns a normalized random sample from the overall population.
+    pandas_data: Pandas data frame that contains the population.
+    """
+    # pandas_data contains a list of data frame objects
+    #   each data frame object contains
+    random_indices = set()
+    while(len(random_indices) < SAMPLE_SIZE):
+        random_indices.add(random.randint(0, 999))
+
+    # This is a literal mess, but it should work
+    astar_samples = {0:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    1:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    2:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    3:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}}
+    rrt_samples = {0:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    1:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    2:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    3:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}}
+    rrt_threaded_samples = {0:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    1:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    2:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    3:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}}
+    gpu_samples = {0:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    1:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    2:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}, 
+                    3:{KEYS[0]:[], KEYS[1]:[], KEYS[2]:[], KEYS[3]:[]}}
+    for array in range(len(pandas_data)):
+        for frame in range(len(pandas_data[array])):
+            for index in random_indices:
+                # Access the data frame calling
+                #   pandas_data[array][frame]
+                if array == 0:
+                    astar_samples[frame][KEYS[0]].append(
+                        pandas_data[array][frame].get(KEYS[0])[index])
+                    astar_samples[frame][KEYS[1]].append(
+                        pandas_data[array][frame].get(KEYS[1])[index])
+                    astar_samples[frame][KEYS[2]].append(
+                        pandas_data[array][frame].get(KEYS[2])[index])
+                    astar_samples[frame][KEYS[3]].append(
+                        pandas_data[array][frame].get(KEYS[3])[index])
+                elif array == 1:
+                    rrt_samples[frame][KEYS[0]].append(
+                        pandas_data[array][frame].get(KEYS[0])[index])
+                    rrt_samples[frame][KEYS[1]].append(
+                        pandas_data[array][frame].get(KEYS[1])[index])
+                    rrt_samples[frame][KEYS[2]].append(
+                        pandas_data[array][frame].get(KEYS[2])[index])
+                    rrt_samples[frame][KEYS[3]].append(
+                        pandas_data[array][frame].get(KEYS[3])[index])
+                elif array == 2:
+                    rrt_threaded_samples[frame][KEYS[0]].append(
+                        pandas_data[array][frame].get(KEYS[0])[index])
+                    rrt_threaded_samples[frame][KEYS[1]].append(
+                        pandas_data[array][frame].get(KEYS[1])[index])
+                    rrt_threaded_samples[frame][KEYS[2]].append(
+                        pandas_data[array][frame].get(KEYS[2])[index])
+                    rrt_threaded_samples[frame][KEYS[3]].append(
+                        pandas_data[array][frame].get(KEYS[3])[index])
+                elif array == 3:
+                    gpu_samples[frame][KEYS[0]].append(
+                        pandas_data[array][frame].get(KEYS[0])[index])
+                    gpu_samples[frame][KEYS[1]].append(
+                        pandas_data[array][frame].get(KEYS[1])[index])
+                    gpu_samples[frame][KEYS[2]].append(
+                        pandas_data[array][frame].get(KEYS[2])[index])
+                    gpu_samples[frame][KEYS[3]].append(
+                        pandas_data[array][frame].get(KEYS[3])[index])
+    return (astar_samples, 
+            rrt_samples, 
+            rrt_threaded_samples, 
+            gpu_samples)
+
 def seaborn_plot(pandas_data):
     """
     Outputs a plot of all data using seaborn.
@@ -57,21 +137,6 @@ def seaborn_plot(pandas_data):
     for i in range(len(pandas_data)):
         for j in range(len(pandas_data[i])):
             sns.regplot(x=agent.CSV_HEADERS[2], y=agent.CSV_HEADERS[3], data=pandas_data[i][j])
-
-def write_models_to_file(pandas_data):
-    """
-    Writes statistical models from the files contained in out to file.
-    """
-    for i in range(len(pandas_data)):
-        with open(MODELS_FILES[i], 'w') as f:
-            f.write(("-"*80) + "\n")
-            f.write(MODELS_FILE_HEADERS[i] + "\n")
-            f.write(("-"*80) + "\n")
-            for j in range(len(pandas_data[0])):
-                f.write("Map " + str(j+1) + " Type 2 Anova:\n")
-                f.write(str(sm.stats.anova_lm(ols(formula=OLS_FORMULA, data=pandas_data[i][j]).fit(), typ=2)) + "\n")
-                if i < 3: f.write("\n")
-            f.write(("-" * 80) + "\n")
 
 def write_stats_to_file(pandas_data):
     """
@@ -89,5 +154,13 @@ def write_stats_to_file(pandas_data):
             f.write(("-" * 80) + "\n")
 
 if __name__ == '__main__':
-    data = get_pandas_data()
-    write_stats_to_file(data)
+    samples = random_sample(get_pandas_data())
+    astar_samples = samples[0]
+    gpu_samples = samples[3]
+    with open("../stats/sample_data.txt", 'w') as f:
+        for i in range(4):
+            f.write("A* Sample Data Map {0}\r\n".format(i+1))
+            f.write(str(pandas.DataFrame.from_dict(astar_samples[i]).describe())+"\r\n")
+            f.write("RRT-GPU Sample Data Map {0}:\r\n".format(i+1))
+            f.write(str(pandas.DataFrame.from_dict(gpu_samples[i]).describe())+"\r\n")
+            f.write("\r\n")
