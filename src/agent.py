@@ -622,13 +622,13 @@ def visualize():
 
     for i in range(len(MISSION_FILES)):
         # Attempt to start a mission:
-        my_mission = MalmoPython.MissionSpec(open(MISSION_FILES[i], 'r').read(), False)
-        planner = Agent(MISSION_START, MISSION_GOALS[i])
+        my_mission = MalmoPython.MissionSpec(open(MISSION_FILES[i+3], 'r').read(), False)
+        """planner = Agent(MISSION_START, MISSION_GOALS[i])
         planner.create_world((MISSION_LOWER_BOUNDS[i][0], MISSION_UPPER_BOUNDS[i][0]),
                                (MISSION_LOWER_BOUNDS[i][1], MISSION_UPPER_BOUNDS[i][1]),
                                (MISSION_LOWER_BOUNDS[i][2], MISSION_UPPER_BOUNDS[i][2]),
                                MISSION_TEXT_FILES[i])
-        path = planner.rrt()
+        path = planner.astar()"""
 
         if BOOL_DEBUG_PATHS:
             w = dict()
@@ -672,10 +672,10 @@ def visualize():
         while world_state.is_mission_running:
             sys.stdout.write(".")
             time.sleep(1.0)
-            world_state = agent_host.getWorldState()
+            """world_state = agent_host.getWorldState()
             if path:
                 position = path.pop()
-                agent_host.sendCommand("tp {0} {1} {2}".format(*position))
+                agent_host.sendCommand("tp {0} {1} {2}".format(*position))"""
 
         print()
         print("Mission ended")
@@ -688,4 +688,4 @@ if __name__ == '__main__':
     #    visualize()
     #else:
     #    gather_data(1)
-    Agent.gpu_rrt()
+    visualize()
