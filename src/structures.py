@@ -113,7 +113,7 @@ class PriorityQueue(object):
             else:
                 raise TypeError("New priority data type does not match the data type for the current priority of the item!")
         else:
-            raise IndexError("Index exceeded boudns of the priority queue!")
+            raise IndexError("Index exceeded bounds of the priority queue!")
 
     def __contains__(self, data):
         for item in self.queue:
@@ -152,14 +152,3 @@ class PriorityQueue(object):
         Sort the priority queue.
         """
         self.queue.sort(reverse=False if self.order=="ASC" else True)
-
-def main(*args, **kwargs):
-    import random
-
-    queue = PriorityQueue()
-
-    for iteration in range(random.randint(5, 25)):
-        queue.enqueue(random.randint(0, 100), random.randint(-100, 100))
-
-if __name__ == '__main__':
-    main()
